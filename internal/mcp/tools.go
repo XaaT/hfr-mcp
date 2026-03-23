@@ -40,31 +40,37 @@ type Result struct {
 	Message string `json:"message"`
 }
 
+// LoginFunc is called before each tool to ensure the client is logged in
+type LoginFunc func() error
+
 // RegisterTools adds all HFR tools to the MCP server
-func RegisterTools(srv *mcp.Server, client *hfr.Client) {
+func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_read",
 		Description: "Lire un topic HFR. Retourne les posts de la page demandee.",
-	}, handleRead(client))
+	}, handleRead(client, login))
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_reply",
 		Description: "Poster une reponse sur un topic HFR.",
-	}, handleReply(client))
+	}, handleReply(client, login))
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_edit",
 		Description: "Editer un post existant sur HFR.",
-	}, handleEdit(client))
+	}, handleEdit(client, login))
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_mp",
 		Description: "Envoyer un message prive sur HFR.",
-	}, handleMP(client))
+	}, handleMP(client, login))
 }
 
-func handleRead(client *hfr.Client) mcp.ToolHandlerFor[ReadInput, Result] {
+func handleRead(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReadInput, Result] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input ReadInput) (*mcp.CallToolResult, Result, error) {
+		if err := login(); err != nil {
+			return nil, Result{}, fmt.Errorf("login failed: %w", err)
+		}
 		page := input.Page
 		if page == 0 {
 			page = 1
@@ -77,8 +83,11 @@ func handleRead(client *hfr.Client) mcp.ToolHandlerFor[ReadInput, Result] {
 	}
 }
 
-func handleReply(client *hfr.Client) mcp.ToolHandlerFor[ReplyInput, Result] {
+func handleReply(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReplyInput, Result] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input ReplyInput) (*mcp.CallToolResult, Result, error) {
+		if err := login(); err != nil {
+			return nil, Result{}, fmt.Errorf("login failed: %w", err)
+		}
 		if err := client.Reply(input.Cat, input.Post, input.Content); err != nil {
 			return nil, Result{}, fmt.Errorf("reply failed: %w", err)
 		}
@@ -86,8 +95,11 @@ func handleReply(client *hfr.Client) mcp.ToolHandlerFor[ReplyInput, Result] {
 	}
 }
 
-func handleEdit(client *hfr.Client) mcp.ToolHandlerFor[EditInput, Result] {
+func handleEdit(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[EditInput, Result] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input EditInput) (*mcp.CallToolResult, Result, error) {
+		if err := login(); err != nil {
+			return nil, Result{}, fmt.Errorf("login failed: %w", err)
+		}
 		if err := client.Edit(input.Cat, input.Post, input.Numreponse, input.Content); err != nil {
 			return nil, Result{}, fmt.Errorf("edit failed: %w", err)
 		}
@@ -95,8 +107,11 @@ func handleEdit(client *hfr.Client) mcp.ToolHandlerFor[EditInput, Result] {
 	}
 }
 
-func handleMP(client *hfr.Client) mcp.ToolHandlerFor[MPInput, Result] {
+func handleMP(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[MPInput, Result] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input MPInput) (*mcp.CallToolResult, Result, error) {
+		if err := login(); err != nil {
+			return nil, Result{}, fmt.Errorf("login failed: %w", err)
+		}
 		if err := client.SendMP(input.Dest, input.Subject, input.Content); err != nil {
 			return nil, Result{}, fmt.Errorf("mp failed: %w", err)
 		}
