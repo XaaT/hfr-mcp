@@ -1,7 +1,5 @@
 package hfr
 
-import "strings"
-
 // SendMP sends a private message
 func (c *Client) SendMP(dest, subject, content string) error {
 	if err := c.ensureAuth(); err != nil {
@@ -21,19 +19,10 @@ func (c *Client) SendMP(dest, subject, content string) error {
 	data.Set("search_smilies", "")
 	data.Set("ColorUsedMem", "")
 
-	doc, err := c.doPost("/bddpost.php?config=hfr.inc", data)
+	result, err := c.doPost("/bddpost.php?config=hfr.inc", data)
 	if err != nil {
 		return err
 	}
 
-	if respErr := checkResponseErrors(doc); respErr != nil {
-		return respErr
-	}
-
-	body := doc.Text()
-	if !strings.Contains(body, "posté avec succès") {
-		return &HfrError{Code: "mp", Message: "MP may have failed: success message not found"}
-	}
-
-	return nil
+	return checkPostSuccess(result, "posté avec succès", "mp")
 }

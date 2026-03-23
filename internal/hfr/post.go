@@ -3,7 +3,6 @@ package hfr
 import (
 	"fmt"
 	"strconv"
-	"strings"
 )
 
 // Reply posts a new message on a topic
@@ -24,21 +23,12 @@ func (c *Client) Reply(cat, postId int, content string) error {
 	data.Set("search_smilies", "")
 	data.Set("ColorUsedMem", "")
 
-	doc, err := c.doPost("/bddpost.php?config=hfr.inc", data)
+	result, err := c.doPost("/bddpost.php?config=hfr.inc", data)
 	if err != nil {
 		return err
 	}
 
-	if respErr := checkResponseErrors(doc); respErr != nil {
-		return respErr
-	}
-
-	body := doc.Text()
-	if !strings.Contains(body, "posté avec succès") {
-		return &HfrError{Code: "post", Message: "reply may have failed: success message not found"}
-	}
-
-	return nil
+	return checkPostSuccess(result, "posté avec succès", "post")
 }
 
 // Edit modifies an existing post
@@ -77,19 +67,10 @@ func (c *Client) Edit(cat, postId, numreponse int, content string) error {
 		data.Set("subcat", "")
 	}
 
-	doc, err := c.doPost("/bdd.php?config=hfr.inc", data)
+	result, err := c.doPost("/bdd.php?config=hfr.inc", data)
 	if err != nil {
 		return err
 	}
 
-	if respErr := checkResponseErrors(doc); respErr != nil {
-		return respErr
-	}
-
-	body := doc.Text()
-	if !strings.Contains(body, "édité avec succès") {
-		return &HfrError{Code: "edit", Message: "edit may have failed: success message not found"}
-	}
-
-	return nil
+	return checkPostSuccess(result, "édité avec succès", "edit")
 }

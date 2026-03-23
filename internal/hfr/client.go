@@ -122,9 +122,21 @@ func (c *Client) baseFormData(cat string, content string) url.Values {
 	}
 }
 
-// doPost sends a POST request and returns the parsed document
-func (c *Client) doPost(endpoint string, data url.Values) (*goquery.Document, error) {
-	resp, err := c.http.PostForm(baseURL+endpoint, data)
+// PostResult holds the parsed response from a POST
+type PostResult struct {
+	Doc        *goquery.Document
+	StatusCode int
+}
+
+// doPost sends a POST request without following redirects and returns the result
+func (c *Client) doPost(endpoint string, data url.Values) (*PostResult, error) {
+	// Use a client that does not follow redirects so we can read the confirmation page
+	noRedirect := *c.http
+	noRedirect.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	resp, err := noRedirect.PostForm(baseURL+endpoint, data)
 	if err != nil {
 		return nil, fmt.Errorf("post request failed: %w", err)
 	}
@@ -135,7 +147,7 @@ func (c *Client) doPost(endpoint string, data url.Values) (*goquery.Document, er
 		return nil, fmt.Errorf("response parse failed: %w", err)
 	}
 
-	return doc, nil
+	return &PostResult{Doc: doc, StatusCode: resp.StatusCode}, nil
 }
 
 // doGet sends a GET request and returns the parsed document
@@ -152,6 +164,26 @@ func (c *Client) doGet(fullURL string) (*goquery.Document, error) {
 	}
 
 	return doc, nil
+}
+
+// checkPostSuccess validates a POST result: 302 = success, 200 = check body for confirmation or errors
+func checkPostSuccess(result *PostResult, successMsg, errCode string) error {
+	// 302 redirect means HFR accepted the action and redirects to the topic/MP page
+	if result.StatusCode >= 300 && result.StatusCode < 400 {
+		return nil
+	}
+
+	// On 200, check for known errors first, then look for the success message
+	if respErr := checkResponseErrors(result.Doc); respErr != nil {
+		return respErr
+	}
+
+	body := result.Doc.Text()
+	if !strings.Contains(body, successMsg) {
+		return &HfrError{Code: errCode, Message: errCode + " may have failed: success message not found"}
+	}
+
+	return nil
 }
 
 // checkResponseErrors parses common HFR error messages from a response
