@@ -35,6 +35,12 @@ type MPInput struct {
 	Content string `json:"content" jsonschema:"Contenu du message en BBCode HFR"`
 }
 
+type QuoteInput struct {
+	Cat        int `json:"cat" jsonschema:"Numero de categorie HFR"`
+	Post       int `json:"post" jsonschema:"Numero du topic"`
+	Numreponse int `json:"numreponse" jsonschema:"Numero du message a citer"`
+}
+
 // Output struct
 type Result struct {
 	Message string `json:"message"`
@@ -64,6 +70,11 @@ func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 		Name:        "hfr_mp",
 		Description: "Envoyer un message prive sur HFR.",
 	}, handleMP(client, login))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "hfr_quote",
+		Description: "Recuperer le BBCode de citation d'un message HFR. A utiliser avant hfr_reply pour citer correctement.",
+	}, handleQuote(client, login))
 }
 
 func handleRead(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReadInput, Result] {
@@ -104,6 +115,19 @@ func handleEdit(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[EditInpu
 			return nil, Result{}, fmt.Errorf("edit failed: %w", err)
 		}
 		return nil, Result{Message: "Message edite avec succes."}, nil
+	}
+}
+
+func handleQuote(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[QuoteInput, Result] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input QuoteInput) (*mcp.CallToolResult, Result, error) {
+		if err := login(); err != nil {
+			return nil, Result{}, fmt.Errorf("login failed: %w", err)
+		}
+		bbcode, err := client.FetchQuote(input.Cat, input.Post, input.Numreponse)
+		if err != nil {
+			return nil, Result{}, fmt.Errorf("quote failed: %w", err)
+		}
+		return nil, Result{Message: bbcode}, nil
 	}
 }
 
