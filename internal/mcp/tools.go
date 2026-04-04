@@ -11,9 +11,11 @@ import (
 // Input structs — le SDK derive le JSON schema automatiquement
 
 type ReadInput struct {
-	Cat  int `json:"cat" jsonschema:"Numero de categorie HFR"`
-	Post int `json:"post" jsonschema:"Numero du topic"`
-	Page int `json:"page,omitempty" jsonschema:"Numero de page (defaut 1)"`
+	Cat      int `json:"cat" jsonschema:"Numero de categorie HFR"`
+	Post     int `json:"post" jsonschema:"Numero du topic"`
+	Page     int `json:"page,omitempty" jsonschema:"Numero de page (defaut 1, 0 pour la derniere)"`
+	PageFrom int `json:"page_from,omitempty" jsonschema:"Debut de range (negatif = relatif a la fin, ex: -9)"`
+	PageTo   int `json:"page_to,omitempty" jsonschema:"Fin de range (0 = derniere page)"`
 }
 
 type ReplyInput struct {
@@ -54,7 +56,7 @@ type LoginFunc func() error
 func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_read",
-		Description: "Lire un topic HFR. Retourne les posts de la page demandee.",
+		Description: "Lire un topic HFR. page=0 pour la derniere page. page_from/page_to pour lire plusieurs pages en parallele (valeurs negatives = relatif a la fin).",
 	}, handleRead(client, login))
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -83,11 +85,20 @@ func handleRead(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReadInpu
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
 		}
-		page := input.Page
-		if page == 0 {
-			page = 1
+
+		var topic *hfr.Topic
+		var err error
+
+		if input.PageFrom != 0 || input.PageTo != 0 {
+			topic, err = client.ReadTopicRange(input.Cat, input.Post, input.PageFrom, input.PageTo)
+		} else {
+			page := input.Page
+			if page == 0 {
+				page = 1
+			}
+			topic, err = client.ReadTopic(input.Cat, input.Post, page)
 		}
-		topic, err := client.ReadTopic(input.Cat, input.Post, page)
+
 		if err != nil {
 			return nil, Result{}, fmt.Errorf("read failed: %w", err)
 		}

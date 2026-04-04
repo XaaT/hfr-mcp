@@ -31,6 +31,37 @@ func parseEditPage(doc *goquery.Document) EditInfo {
 	return info
 }
 
+// parseTotalPages extracts the total page count from a topic page
+func parseTotalPages(doc *goquery.Document) int {
+	// Method 1: hidden input (available when authenticated)
+	if val, exists := doc.Find("input[name=page]").Attr("value"); exists {
+		if n, err := strconv.Atoi(val); err == nil && n > 1 {
+			return n
+		}
+	}
+
+	// Method 2: find max page number from pagination links (sujet_{post}_{page}.htm)
+	max := 1
+	doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+		href, _ := s.Attr("href")
+		// Match sujet_XXXXX_NNN.htm
+		idx := strings.LastIndex(href, "_")
+		if idx == -1 {
+			return
+		}
+		suffix := href[idx+1:]
+		dotIdx := strings.Index(suffix, ".")
+		if dotIdx == -1 {
+			return
+		}
+		if n, err := strconv.Atoi(suffix[:dotIdx]); err == nil && n > max {
+			max = n
+		}
+	})
+
+	return max
+}
+
 // parsePosts extracts posts from a topic page
 func parsePosts(doc *goquery.Document) []Post {
 	var posts []Post

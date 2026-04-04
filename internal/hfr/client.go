@@ -27,7 +27,7 @@ func NewClient() *Client {
 	return &Client{
 		http: &http.Client{
 			Jar:     jar,
-			Timeout: 15 * time.Second,
+			Timeout: 30 * time.Second,
 		},
 	}
 }

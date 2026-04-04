@@ -10,10 +10,11 @@ type Post struct {
 
 // Topic holds metadata about a forum topic page
 type Topic struct {
-	Cat   int
-	Post  int
-	Page  int
-	Posts []Post
+	Cat        int
+	Post       int
+	Page       int
+	TotalPages int
+	Posts      []Post
 }
 
 // EditInfo holds info parsed from an edit page

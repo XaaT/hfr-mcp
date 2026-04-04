@@ -5,10 +5,11 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 )
 
-// ReadTopic fetches and parses a topic page
-func (c *Client) ReadTopic(cat, postId, page int) (*Topic, error) {
+// readSinglePage fetches and parses one topic page, returning the doc too
+func (c *Client) readSinglePage(cat, postId, page int) (*Topic, error) {
 	topicURL := fmt.Sprintf("%s/forum2.php?config=hfr.inc&cat=%d&post=%d&page=%d&p=1&sondage=0&owntopic=0&trash=0&trash_post=0&print=0&numreponse=0&quote_only=0&new=0&nojs=0",
 		baseURL, cat, postId, page)
 
@@ -17,14 +18,89 @@ func (c *Client) ReadTopic(cat, postId, page int) (*Topic, error) {
 		return nil, fmt.Errorf("read topic failed: %w", err)
 	}
 
-	posts := parsePosts(doc)
-
 	return &Topic{
-		Cat:   cat,
-		Post:  postId,
-		Page:  page,
-		Posts: posts,
+		Cat:        cat,
+		Post:       postId,
+		Page:       page,
+		TotalPages: parseTotalPages(doc),
+		Posts:      parsePosts(doc),
 	}, nil
+}
+
+// ReadTopic fetches a single topic page. Use page=0 for the last page.
+func (c *Client) ReadTopic(cat, postId, page int) (*Topic, error) {
+	if page == 0 {
+		// Fetch page 1 to discover total pages, then fetch the last
+		first, err := c.readSinglePage(cat, postId, 1)
+		if err != nil {
+			return nil, err
+		}
+		if first.TotalPages <= 1 {
+			return first, nil
+		}
+		return c.readSinglePage(cat, postId, first.TotalPages)
+	}
+	return c.readSinglePage(cat, postId, page)
+}
+
+// ReadTopicRange fetches multiple pages concurrently and returns a single merged Topic.
+// Use from=0 to mean "last page", negative values for relative (e.g. from=-9, to=0 = last 10 pages).
+func (c *Client) ReadTopicRange(cat, postId, from, to int) (*Topic, error) {
+	// Resolve total pages if we need relative/last references
+	if from <= 0 || to <= 0 {
+		first, err := c.readSinglePage(cat, postId, 1)
+		if err != nil {
+			return nil, err
+		}
+		total := first.TotalPages
+		if from <= 0 {
+			from = total + from
+		}
+		if to <= 0 {
+			to = total + to
+		}
+		if from < 1 {
+			from = 1
+		}
+	}
+
+	if from > to {
+		from, to = to, from
+	}
+
+	count := to - from + 1
+	results := make([]*Topic, count)
+	errs := make([]error, count)
+
+	var wg sync.WaitGroup
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(idx, page int) {
+			defer wg.Done()
+			results[idx], errs[idx] = c.readSinglePage(cat, postId, page)
+		}(i, from+i)
+	}
+	wg.Wait()
+
+	// Check errors
+	for i, err := range errs {
+		if err != nil {
+			return nil, fmt.Errorf("page %d: %w", from+i, err)
+		}
+	}
+
+	// Merge all posts in order
+	merged := &Topic{
+		Cat:        cat,
+		Post:       postId,
+		Page:       from,
+		TotalPages: results[0].TotalPages,
+	}
+	for _, t := range results {
+		merged.Posts = append(merged.Posts, t.Posts...)
+	}
+
+	return merged, nil
 }
 
 // FetchQuote retrieves the BBCode quote for one or more messages via HFR's message.php reply page.

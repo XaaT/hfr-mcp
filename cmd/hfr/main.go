@@ -13,7 +13,7 @@ import (
 const usage = `Usage: hfr [--auth] <command> [args...]
 
 Commands:
-  read   <cat> <post> [page]              Read a topic
+  read   <cat> <post> [page|last|from:to]  Read a topic
   reply  <cat> <post> <content>           Post a reply
   edit   <cat> <post> <numreponse> <content>  Edit a post
   quote  <cat> <post> <numreponse>        Get quote BBCode
@@ -79,24 +79,59 @@ func main() {
 
 func cmdRead(client *hfr.Client, args []string) {
 	if len(args) < 2 {
-		die("usage: hfr read <cat> <post> [page]")
+		die("usage: hfr read <cat> <post> [page|last|from-to|last-N:last]")
 	}
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
-	page := 1
+
+	pageArg := "1"
 	if len(args) >= 3 {
-		page = mustInt(args[2], "page")
+		pageArg = args[2]
 	}
 
-	topic, err := client.ReadTopic(cat, post, page)
+	var topic *hfr.Topic
+	var err error
+
+	switch {
+	case pageArg == "last":
+		topic, err = client.ReadTopic(cat, post, 0)
+	case strings.Contains(pageArg, ":"):
+		// Range: "340:350" or "last-10:last"
+		from, to := parseRange(pageArg)
+		topic, err = client.ReadTopicRange(cat, post, from, to)
+	default:
+		page := mustInt(pageArg, "page")
+		topic, err = client.ReadTopic(cat, post, page)
+	}
+
 	if err != nil {
 		die("read failed: %v", err)
 	}
 
-	fmt.Printf("Topic cat=%d post=%d page=%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, len(topic.Posts))
+	fmt.Printf("Topic cat=%d post=%d page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
 	for _, p := range topic.Posts {
 		fmt.Printf("--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
 	}
+}
+
+func parseRange(s string) (from, to int) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) != 2 {
+		die("invalid range: %q (expected from:to)", s)
+	}
+	return parsePageRef(parts[0]), parsePageRef(parts[1])
+}
+
+func parsePageRef(s string) int {
+	s = strings.TrimSpace(s)
+	if s == "last" {
+		return 0
+	}
+	if strings.HasPrefix(s, "last-") {
+		n := mustInt(strings.TrimPrefix(s, "last-"), "offset")
+		return -n
+	}
+	return mustInt(s, "page")
 }
 
 func cmdReply(client *hfr.Client, args []string) {
