@@ -25,13 +25,13 @@ func (c *Client) ReadTopic(cat, postId, page int) (*Topic, error) {
 	}, nil
 }
 
-// FetchQuote retrieves the BBCode quote for a specific message via HFR's quote_only page
+// FetchQuote retrieves the BBCode quote for a specific message via HFR's message.php reply page.
 func (c *Client) FetchQuote(cat, postId, numreponse int) (string, error) {
 	if err := c.ensureAuth(); err != nil {
 		return "", err
 	}
 
-	quoteURL := fmt.Sprintf("%s/forum2.php?config=hfr.inc&cat=%d&post=%d&page=1&p=1&numreponse=%d&quote_only=1&new=0&nojs=0",
+	quoteURL := fmt.Sprintf("%s/message.php?config=hfr.inc&cat=%d&post=%d&numrep=%d&page=1&p=1&new=0",
 		baseURL, cat, postId, numreponse)
 
 	doc, err := c.doGet(quoteURL)
@@ -39,12 +39,9 @@ func (c *Client) FetchQuote(cat, postId, numreponse int) (string, error) {
 		return "", fmt.Errorf("fetch quote failed: %w", err)
 	}
 
-	// HFR returns the quote BBCode in a textarea named content_form
-	bbcode := doc.Find("textarea[name=content_form]").Text()
-	bbcode = strings.TrimSpace(bbcode)
-
+	bbcode := strings.TrimSpace(doc.Find("textarea#content_form").Text())
 	if bbcode == "" {
-		return "", &HfrError{Code: "quote", Message: "quote not found — maybe session expired or message does not exist"}
+		return "", &HfrError{Code: "quote", Message: "quote textarea empty — check cat/post/numreponse params"}
 	}
 
 	return bbcode, nil
