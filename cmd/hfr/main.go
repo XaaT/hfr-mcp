@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/XaaT/hfr-mcp/internal/config"
 	"github.com/XaaT/hfr-mcp/internal/hfr"
 )
 
@@ -19,10 +20,10 @@ Commands:
   mp     <dest> <subject> <content>       Send a private message
 
 Options:
-  --auth    Login before executing (uses HFR_LOGIN/HFR_PASSWD)
-            Required for reply, edit, quote, mp. Optional for read.
+  --auth    Login before executing. Required for reply, edit, quote, mp.
 
-Environment: HFR_LOGIN, HFR_PASSWD`
+Config: ./hfr.conf or ~/.config/hfr/config (login=, passwd=)
+Env vars HFR_LOGIN/HFR_PASSWD override config file.`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -51,12 +52,11 @@ func main() {
 	client := hfr.NewClient()
 
 	if auth {
-		login := os.Getenv("HFR_LOGIN")
-		passwd := os.Getenv("HFR_PASSWD")
-		if login == "" || passwd == "" {
-			die("HFR_LOGIN and HFR_PASSWD environment variables are required")
+		cfg := config.Load()
+		if cfg.Login == "" || cfg.Passwd == "" {
+			die("credentials required: set login/passwd in hfr.conf or ~/.config/hfr/config, or HFR_LOGIN/HFR_PASSWD env vars")
 		}
-		if err := client.Login(login, passwd); err != nil {
+		if err := client.Login(cfg.Login, cfg.Passwd); err != nil {
 			die("login failed: %v", err)
 		}
 	}
