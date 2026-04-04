@@ -30,16 +30,19 @@ func main() {
 
 	client := hfr.NewClient()
 
-	// read doesn't require auth
-	if cmd != "read" {
-		login := os.Getenv("HFR_LOGIN")
-		passwd := os.Getenv("HFR_PASSWD")
-		if login == "" || passwd == "" {
-			die("HFR_LOGIN and HFR_PASSWD environment variables are required")
-		}
+	login := os.Getenv("HFR_LOGIN")
+	passwd := os.Getenv("HFR_PASSWD")
+	needsAuth := cmd != "read"
+
+	if login != "" && passwd != "" {
 		if err := client.Login(login, passwd); err != nil {
-			die("login failed: %v", err)
+			if needsAuth {
+				die("login failed: %v", err)
+			}
+			fmt.Fprintf(os.Stderr, "warning: login failed: %v (continuing anonymous)\n", err)
 		}
+	} else if needsAuth {
+		die("HFR_LOGIN and HFR_PASSWD environment variables are required")
 	}
 
 	switch cmd {
