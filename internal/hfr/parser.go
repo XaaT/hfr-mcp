@@ -40,11 +40,15 @@ func parseTotalPages(doc *goquery.Document) int {
 		}
 	}
 
-	// Method 2: find max page number from pagination links (sujet_{post}_{page}.htm)
+	// Method 2: find max page number from pagination links
+	// HFR pagination uses "Page Suivante" and numbered page links in div.pagepresuiv
 	max := 1
-	doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+	doc.Find("div.pagepresuiv a[href], td a[href]").Each(func(i int, s *goquery.Selection) {
 		href, _ := s.Attr("href")
-		// Match sujet_XXXXX_NNN.htm
+		// Only match topic pagination: sujet_XXXXX_NNN.htm
+		if !strings.Contains(href, "sujet_") {
+			return
+		}
 		idx := strings.LastIndex(href, "_")
 		if idx == -1 {
 			return
