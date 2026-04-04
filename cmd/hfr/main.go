@@ -9,7 +9,7 @@ import (
 	"github.com/XaaT/hfr-mcp/internal/hfr"
 )
 
-const usage = `Usage: hfr <command> [args...]
+const usage = `Usage: hfr [--auth] <command> [args...]
 
 Commands:
   read   <cat> <post> [page]              Read a topic
@@ -18,6 +18,10 @@ Commands:
   quote  <cat> <post> <numreponse>        Get quote BBCode
   mp     <dest> <subject> <content>       Send a private message
 
+Options:
+  --auth    Login before executing (uses HFR_LOGIN/HFR_PASSWD)
+            Required for reply, edit, quote, mp. Optional for read.
+
 Environment: HFR_LOGIN, HFR_PASSWD`
 
 func main() {
@@ -25,24 +29,36 @@ func main() {
 		die(usage)
 	}
 
-	cmd := os.Args[1]
-	args := os.Args[2:]
+	args := os.Args[1:]
+	auth := false
+	if args[0] == "--auth" {
+		auth = true
+		args = args[1:]
+	}
+
+	if len(args) < 1 {
+		die(usage)
+	}
+
+	cmd := args[0]
+	args = args[1:]
+
+	needsAuth := cmd != "read"
+	if needsAuth {
+		auth = true
+	}
 
 	client := hfr.NewClient()
 
-	login := os.Getenv("HFR_LOGIN")
-	passwd := os.Getenv("HFR_PASSWD")
-	needsAuth := cmd != "read"
-
-	if login != "" && passwd != "" {
-		if err := client.Login(login, passwd); err != nil {
-			if needsAuth {
-				die("login failed: %v", err)
-			}
-			fmt.Fprintf(os.Stderr, "warning: login failed: %v (continuing anonymous)\n", err)
+	if auth {
+		login := os.Getenv("HFR_LOGIN")
+		passwd := os.Getenv("HFR_PASSWD")
+		if login == "" || passwd == "" {
+			die("HFR_LOGIN and HFR_PASSWD environment variables are required")
 		}
-	} else if needsAuth {
-		die("HFR_LOGIN and HFR_PASSWD environment variables are required")
+		if err := client.Login(login, passwd); err != nil {
+			die("login failed: %v", err)
+		}
 	}
 
 	switch cmd {
