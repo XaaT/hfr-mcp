@@ -43,7 +43,7 @@ func (c *Client) Login(pseudo, password string) error {
 	if err != nil {
 		return fmt.Errorf("login request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
@@ -75,7 +75,7 @@ func (c *Client) fetchHashCheck() error {
 	if err != nil {
 		return fmt.Errorf("hash_check request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
@@ -128,7 +128,7 @@ func (c *Client) doPost(endpoint string, data url.Values) (*goquery.Document, er
 	if err != nil {
 		return nil, fmt.Errorf("post request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {
@@ -144,7 +144,7 @@ func (c *Client) doGet(fullURL string) (*goquery.Document, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	if err != nil {

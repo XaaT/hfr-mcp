@@ -47,7 +47,7 @@ func readFile(path string, cfg *Config) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer f.Close() //nolint:errcheck
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
