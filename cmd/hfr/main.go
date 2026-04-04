@@ -130,13 +130,16 @@ func cmdEdit(client *hfr.Client, args []string) {
 
 func cmdQuote(client *hfr.Client, args []string) {
 	if len(args) < 3 {
-		die("usage: hfr quote <cat> <post> <numreponse>")
+		die("usage: hfr quote <cat> <post> <numreponse> [numreponse2 ...]")
 	}
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
-	numreponse := mustInt(args[2], "numreponse")
+	var nums []int
+	for _, a := range args[2:] {
+		nums = append(nums, mustInt(a, "numreponse"))
+	}
 
-	bbcode, err := client.FetchQuote(cat, post, numreponse)
+	bbcode, err := client.FetchQuote(cat, post, nums...)
 	if err != nil {
 		die("quote failed: %v", err)
 	}

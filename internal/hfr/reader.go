@@ -2,6 +2,8 @@ package hfr
 
 import (
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -25,14 +27,29 @@ func (c *Client) ReadTopic(cat, postId, page int) (*Topic, error) {
 	}, nil
 }
 
-// FetchQuote retrieves the BBCode quote for a specific message via HFR's message.php reply page.
-func (c *Client) FetchQuote(cat, postId, numreponse int) (string, error) {
+// FetchQuote retrieves the BBCode quote for one or more messages via HFR's message.php reply page.
+// For multiple numreponses, it sets the multiquote cookie so HFR returns all quotes in a single request.
+func (c *Client) FetchQuote(cat, postId int, numreponses ...int) (string, error) {
 	if err := c.ensureAuth(); err != nil {
 		return "", err
 	}
+	if len(numreponses) == 0 {
+		return "", &HfrError{Code: "quote", Message: "at least one numreponse required"}
+	}
+
+	// Set multiquote cookie: quoteshardwarefr-{cat}-{post}=|num1|num2|...
+	u, _ := url.Parse(baseURL)
+	cookieVal := ""
+	for _, nr := range numreponses {
+		cookieVal += fmt.Sprintf("|%d", nr)
+	}
+	c.http.Jar.SetCookies(u, []*http.Cookie{{
+		Name:  fmt.Sprintf("quoteshardwarefr-%d-%d", cat, postId),
+		Value: cookieVal,
+	}})
 
 	quoteURL := fmt.Sprintf("%s/message.php?config=hfr.inc&cat=%d&post=%d&numrep=%d&page=1&p=1&new=0",
-		baseURL, cat, postId, numreponse)
+		baseURL, cat, postId, numreponses[0])
 
 	doc, err := c.doGet(quoteURL)
 	if err != nil {

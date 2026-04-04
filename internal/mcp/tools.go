@@ -36,9 +36,10 @@ type MPInput struct {
 }
 
 type QuoteInput struct {
-	Cat        int `json:"cat" jsonschema:"Numero de categorie HFR"`
-	Post       int `json:"post" jsonschema:"Numero du topic"`
-	Numreponse int `json:"numreponse" jsonschema:"Numero du message a citer"`
+	Cat         int   `json:"cat" jsonschema:"Numero de categorie HFR"`
+	Post        int   `json:"post" jsonschema:"Numero du topic"`
+	Numreponse  int   `json:"numreponse,omitempty" jsonschema:"Numero du message a citer (simple quote)"`
+	Numreponses []int `json:"numreponses,omitempty" jsonschema:"Numeros des messages a citer (multiquote)"`
 }
 
 // Output struct
@@ -73,7 +74,7 @@ func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_quote",
-		Description: "Recuperer le BBCode de citation d'un message HFR. A utiliser avant hfr_reply pour citer correctement.",
+		Description: "Recuperer le BBCode de citation d'un ou plusieurs messages HFR. Utiliser numreponse pour un seul message, numreponses pour un multiquote.",
 	}, handleQuote(client, login))
 }
 
@@ -123,7 +124,14 @@ func handleQuote(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[QuoteIn
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
 		}
-		bbcode, err := client.FetchQuote(input.Cat, input.Post, input.Numreponse)
+		nums := input.Numreponses
+		if len(nums) == 0 && input.Numreponse != 0 {
+			nums = []int{input.Numreponse}
+		}
+		if len(nums) == 0 {
+			return nil, Result{}, fmt.Errorf("numreponse or numreponses required")
+		}
+		bbcode, err := client.FetchQuote(input.Cat, input.Post, nums...)
 		if err != nil {
 			return nil, Result{}, fmt.Errorf("quote failed: %w", err)
 		}
