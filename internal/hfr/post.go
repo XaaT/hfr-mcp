@@ -23,12 +23,12 @@ func (c *Client) Reply(cat, postId int, content string) error {
 	data.Set("search_smilies", "")
 	data.Set("ColorUsedMem", "")
 
-	result, err := c.doPost("/bddpost.php?config=hfr.inc", data)
+	doc, err := c.doPost("/bddpost.php?config=hfr.inc", data)
 	if err != nil {
 		return err
 	}
 
-	return checkPostSuccess(result, "posté avec succès", "post")
+	return checkPostSuccess(doc, "post")
 }
 
 // Edit modifies an existing post
@@ -67,10 +67,10 @@ func (c *Client) Edit(cat, postId, numreponse int, content string) error {
 		data.Set("subcat", "")
 	}
 
-	result, err := c.doPost("/bdd.php?config=hfr.inc", data)
+	doc, err := c.doPost("/bdd.php?config=hfr.inc", data)
 	if err != nil {
 		return err
 	}
 
-	return checkPostSuccess(result, "édité avec succès", "edit")
+	return checkPostSuccess(doc, "edit")
 }

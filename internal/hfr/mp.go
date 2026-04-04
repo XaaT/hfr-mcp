@@ -19,10 +19,10 @@ func (c *Client) SendMP(dest, subject, content string) error {
 	data.Set("search_smilies", "")
 	data.Set("ColorUsedMem", "")
 
-	result, err := c.doPost("/bddpost.php?config=hfr.inc", data)
+	doc, err := c.doPost("/bddpost.php?config=hfr.inc", data)
 	if err != nil {
 		return err
 	}
 
-	return checkPostSuccess(result, "posté avec succès", "mp")
+	return checkPostSuccess(doc, "mp")
 }
