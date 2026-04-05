@@ -15,4 +15,3 @@ jobs:
         with:
           version: v2.11.4
       - run: go build ./cmd/hfr/
-      - run: go build ./cmd/hfr-mcp/

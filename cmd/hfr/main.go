@@ -1,24 +1,30 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/XaaT/hfr-mcp/internal/config"
 	"github.com/XaaT/hfr-mcp/internal/hfr"
+	hfrmcp "github.com/XaaT/hfr-mcp/internal/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 const usage = `Usage: hfr [--auth] <command> [args...]
 
 Commands:
+  serve                                    Start MCP server (stdio)
   read   <cat> <post> [page|last|from:to]  Read a topic
-  print  <cat> <post> [page] [--last N]  Read in print mode (~1000 posts/page, no signatures)
-  reply  <cat> <post> <content>           Post a reply
+  print  <cat> <post> [page] [--last N]    Read in print mode (~1000 posts/page, no signatures)
+  reply  <cat> <post> <content>            Post a reply
   edit   <cat> <post> <numreponse> <content>  Edit a post
-  quote  <cat> <post> <numreponse>        Get quote BBCode
-  mp     <dest> <subject> <content>       Send a private message
+  quote  <cat> <post> <numreponse>         Get quote BBCode
+  mp     <dest> <subject> <content>        Send a private message
 
 Options:
   --auth    Login before executing. Required for reply, edit, quote, mp.
@@ -45,7 +51,7 @@ func main() {
 	cmd := args[0]
 	args = args[1:]
 
-	needsAuth := cmd != "read" && cmd != "print"
+	needsAuth := cmd != "read" && cmd != "print" && cmd != "serve"
 	if needsAuth {
 		auth = true
 	}
@@ -63,6 +69,9 @@ func main() {
 	}
 
 	switch cmd {
+	case "serve":
+		cmdServe()
+		return
 	case "read":
 		cmdRead(client, args)
 	case "print":
@@ -226,6 +235,42 @@ func cmdMP(client *hfr.Client, args []string) {
 		die("mp failed: %v", err)
 	}
 	fmt.Println("MP sent.")
+}
+
+func cmdServe() {
+	cfg := config.Load()
+	if cfg.Login == "" || cfg.Passwd == "" {
+		die("credentials required: set login/passwd in hfr.conf or ~/.config/hfr/config, or HFR_LOGIN/HFR_PASSWD env vars")
+	}
+
+	client := hfr.NewClient()
+
+	var loginOnce sync.Once
+	var loginErr error
+	lazyLogin := func() error {
+		loginOnce.Do(func() {
+			fmt.Fprintln(os.Stderr, "HFR: logging in as", cfg.Login)
+			loginErr = client.Login(cfg.Login, cfg.Passwd)
+			if loginErr != nil {
+				fmt.Fprintln(os.Stderr, "HFR: login failed:", loginErr)
+			} else {
+				fmt.Fprintln(os.Stderr, "HFR: logged in as", cfg.Login)
+			}
+		})
+		return loginErr
+	}
+
+	srv := mcp.NewServer(
+		&mcp.Implementation{Name: "hfr", Version: "1.0.0"},
+		nil,
+	)
+
+	hfrmcp.RegisterTools(srv, client, lazyLogin)
+
+	fmt.Fprintln(os.Stderr, "HFR MCP server starting (stdio)")
+	if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+		log.Fatalf("MCP server error: %v", err)
+	}
 }
 
 func mustInt(s, name string) int {
