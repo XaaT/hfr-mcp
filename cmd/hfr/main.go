@@ -14,6 +14,7 @@ const usage = `Usage: hfr [--auth] <command> [args...]
 
 Commands:
   read   <cat> <post> [page|last|from:to]  Read a topic
+  print  <cat> <post> [page] [--last N]  Read in print mode (~1000 posts/page, no signatures)
   reply  <cat> <post> <content>           Post a reply
   edit   <cat> <post> <numreponse> <content>  Edit a post
   quote  <cat> <post> <numreponse>        Get quote BBCode
@@ -44,7 +45,7 @@ func main() {
 	cmd := args[0]
 	args = args[1:]
 
-	needsAuth := cmd != "read"
+	needsAuth := cmd != "read" && cmd != "print"
 	if needsAuth {
 		auth = true
 	}
@@ -64,6 +65,8 @@ func main() {
 	switch cmd {
 	case "read":
 		cmdRead(client, args)
+	case "print":
+		cmdPrint(client, args)
 	case "reply":
 		cmdReply(client, args)
 	case "edit":
@@ -109,6 +112,36 @@ func cmdRead(client *hfr.Client, args []string) {
 	}
 
 	fmt.Printf("Topic cat=%d post=%d page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
+	for _, p := range topic.Posts {
+		fmt.Printf("--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
+	}
+}
+
+func cmdPrint(client *hfr.Client, args []string) {
+	if len(args) < 2 {
+		die("usage: hfr print <cat> <post> [page] [--last N]")
+	}
+	cat := mustInt(args[0], "cat")
+	post := mustInt(args[1], "post")
+	page := 0 // default: last print page
+	last := 0 // default: all posts
+	i := 2
+	for i < len(args) {
+		if args[i] == "--last" && i+1 < len(args) {
+			last = mustInt(args[i+1], "last")
+			i += 2
+		} else {
+			page = mustInt(args[i], "page")
+			i++
+		}
+	}
+
+	topic, err := client.ReadTopicPrint(cat, post, page, last)
+	if err != nil {
+		die("print read failed: %v", err)
+	}
+
+	fmt.Printf("Topic cat=%d post=%d print_page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
 	for _, p := range topic.Posts {
 		fmt.Printf("--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
 	}

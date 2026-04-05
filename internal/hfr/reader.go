@@ -8,10 +8,19 @@ import (
 	"sync"
 )
 
-// readSinglePage fetches and parses one topic page, returning the doc too
+// readSinglePage fetches and parses one topic page
 func (c *Client) readSinglePage(cat, postId, page int) (*Topic, error) {
-	topicURL := fmt.Sprintf("%s/forum2.php?config=hfr.inc&cat=%d&post=%d&page=%d&p=1&sondage=0&owntopic=0&trash=0&trash_post=0&print=0&numreponse=0&quote_only=0&new=0&nojs=0",
-		baseURL, cat, postId, page)
+	return c.readPage(cat, postId, page, false)
+}
+
+// readPage fetches and parses one topic page, optionally in print mode (~1000 posts/page, no signatures)
+func (c *Client) readPage(cat, postId, page int, print bool) (*Topic, error) {
+	printVal := 0
+	if print {
+		printVal = 1
+	}
+	topicURL := fmt.Sprintf("%s/forum2.php?config=hfr.inc&cat=%d&post=%d&page=%d&p=1&sondage=0&owntopic=0&trash=0&trash_post=0&print=%d&numreponse=0&quote_only=0&new=0&nojs=0",
+		baseURL, cat, postId, page, printVal)
 
 	doc, err := c.doGet(topicURL)
 	if err != nil {
@@ -25,6 +34,41 @@ func (c *Client) readSinglePage(cat, postId, page int) (*Topic, error) {
 		TotalPages: parseTotalPages(doc),
 		Posts:      parsePosts(doc),
 	}, nil
+}
+
+// ReadTopicPrint fetches a topic in print mode (~1000 posts/page, no signatures).
+// Use last=N to keep only the last N posts (0 = all posts).
+func (c *Client) ReadTopicPrint(cat, postId, page, last int) (*Topic, error) {
+	if page == 0 {
+		// Fetch print page 1 to discover total print pages, then fetch the last
+		first, err := c.readPage(cat, postId, 1, true)
+		if err != nil {
+			return nil, err
+		}
+		if first.TotalPages <= 1 {
+			if last > 0 && len(first.Posts) > last {
+				first.Posts = first.Posts[len(first.Posts)-last:]
+			}
+			return first, nil
+		}
+		topic, err := c.readPage(cat, postId, first.TotalPages, true)
+		if err != nil {
+			return nil, err
+		}
+		if last > 0 && len(topic.Posts) > last {
+			topic.Posts = topic.Posts[len(topic.Posts)-last:]
+		}
+		return topic, nil
+	}
+
+	topic, err := c.readPage(cat, postId, page, true)
+	if err != nil {
+		return nil, err
+	}
+	if last > 0 && len(topic.Posts) > last {
+		topic.Posts = topic.Posts[len(topic.Posts)-last:]
+	}
+	return topic, nil
 }
 
 // ReadTopic fetches a single topic page. Use page=0 for the last page.
