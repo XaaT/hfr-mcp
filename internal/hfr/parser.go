@@ -1,10 +1,17 @@
 package hfr
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+)
+
+var (
+	reMessageEdited = regexp.MustCompile(`Message édité par .+ le \d{2}-\d{2}-\d{4} à \d{2}:\d{2}:\d{2}`)
+	reMessageCited  = regexp.MustCompile(`Message cité \d+ fois?`)
+	reSignature     = regexp.MustCompile(`(?m)\s*-{15}\n\t\t\t.*$`)
 )
 
 // parseEditPage extracts FP detection and subcat/subject from an edit page
@@ -92,9 +99,9 @@ func parsePosts(doc *goquery.Document) []Post {
 			dateText = strings.ReplaceAll(dateText, "\u00a0", " ")
 		}
 
-		// Content: get text from para div
+		// Content: get text from para div, clean noise
 		paraID := "para" + strconv.Itoa(numreponse)
-		content := strings.TrimSpace(doc.Find("#" + paraID).Text())
+		content := cleanContent(doc.Find("#" + paraID).Text())
 
 		posts = append(posts, Post{
 			Numreponse: numreponse,
@@ -105,4 +112,12 @@ func parsePosts(doc *goquery.Document) []Post {
 	})
 
 	return posts
+}
+
+// cleanContent strips noise from post content
+func cleanContent(s string) string {
+	s = reMessageEdited.ReplaceAllString(s, "")
+	s = reMessageCited.ReplaceAllString(s, "")
+	s = reSignature.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
 }
