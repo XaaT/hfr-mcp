@@ -16,6 +16,7 @@ const baseURL = "https://forum.hardware.fr"
 // Client handles all interactions with the HFR forum
 type Client struct {
 	http      *http.Client
+	ua        string
 	pseudo    string
 	hashCheck string
 	authed    bool
@@ -29,6 +30,7 @@ func NewClient() *Client {
 			Jar:     jar,
 			Timeout: 30 * time.Second,
 		},
+		ua: "hfr-mcp/" + Version,
 	}
 }
 
@@ -39,15 +41,9 @@ func (c *Client) Login(pseudo, password string) error {
 		"password": {password},
 	}
 
-	resp, err := c.http.PostForm(baseURL+"/login_validation.php?config=hfr.inc", data)
+	doc, err := c.doPost("/login_validation.php?config=hfr.inc", data)
 	if err != nil {
-		return fmt.Errorf("login request failed: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return fmt.Errorf("login parse failed: %w", err)
+		return fmt.Errorf("login failed: %w", err)
 	}
 
 	body := doc.Text()
@@ -71,15 +67,9 @@ func (c *Client) Login(pseudo, password string) error {
 
 // fetchHashCheck retrieves the anti-CSRF token
 func (c *Client) fetchHashCheck() error {
-	resp, err := c.http.Get(baseURL + "/user/editprofil.php?config=hardwarefr.inc")
+	doc, err := c.doGet(baseURL + "/user/editprofil.php?config=hardwarefr.inc")
 	if err != nil {
-		return fmt.Errorf("hash_check request failed: %w", err)
-	}
-	defer resp.Body.Close() //nolint:errcheck
-
-	doc, err := goquery.NewDocumentFromReader(resp.Body)
-	if err != nil {
-		return fmt.Errorf("hash_check parse failed: %w", err)
+		return fmt.Errorf("hash_check failed: %w", err)
 	}
 
 	hash, exists := doc.Find("input[name=hash_check]").Attr("value")
@@ -124,7 +114,15 @@ func (c *Client) baseFormData(cat string, content string) url.Values {
 
 // doPost sends a POST request and returns the parsed document
 func (c *Client) doPost(endpoint string, data url.Values) (*goquery.Document, error) {
-	resp, err := c.http.PostForm(baseURL+endpoint, data)
+	body := strings.NewReader(data.Encode())
+	req, err := http.NewRequest("POST", baseURL+endpoint, body)
+	if err != nil {
+		return nil, fmt.Errorf("post request failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", c.ua)
+
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("post request failed: %w", err)
 	}
@@ -140,7 +138,13 @@ func (c *Client) doPost(endpoint string, data url.Values) (*goquery.Document, er
 
 // doGet sends a GET request and returns the parsed document
 func (c *Client) doGet(fullURL string) (*goquery.Document, error) {
-	resp, err := c.http.Get(fullURL)
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get request failed: %w", err)
+	}
+	req.Header.Set("User-Agent", c.ua)
+
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("get request failed: %w", err)
 	}

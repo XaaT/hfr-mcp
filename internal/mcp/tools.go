@@ -13,7 +13,7 @@ import (
 type ReadInput struct {
 	Cat      int  `json:"cat" jsonschema:"Numero de categorie HFR"`
 	Post     int  `json:"post" jsonschema:"Numero du topic"`
-	Page     int  `json:"page,omitempty" jsonschema:"Numero de page (defaut 1, 0 pour la derniere)"`
+	Page     *int `json:"page,omitempty" jsonschema:"Numero de page (defaut 1, 0 pour la derniere)"`
 	PageFrom int  `json:"page_from,omitempty" jsonschema:"Debut de range (negatif = relatif a la fin, ex: -9)"`
 	PageTo   int  `json:"page_to,omitempty" jsonschema:"Fin de range (0 = derniere page)"`
 	Print    bool `json:"print,omitempty" jsonschema:"Mode impression: ~1000 posts/page, sans signatures"`
@@ -58,7 +58,7 @@ type LoginFunc func() error
 func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_read",
-		Description: "Lire un topic HFR. page=0 pour la derniere page. page_from/page_to pour lire plusieurs pages en parallele (valeurs negatives = relatif a la fin). print=true pour le mode impression (~1000 posts/page, sans signatures). last=N pour garder les N derniers posts.",
+		Description: "Lire un topic HFR. page defaut 1 si omis, page=0 pour la derniere page. page_from/page_to pour lire plusieurs pages en parallele (valeurs negatives = relatif a la fin, 0 = derniere). print=true pour le mode impression (~1000 posts/page, sans signatures). last=N pour garder les N derniers posts (print uniquement).",
 	}, handleRead(client, login))
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -91,15 +91,16 @@ func handleRead(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReadInpu
 		var topic *hfr.Topic
 		var err error
 
+		page := 1
+		if input.Page != nil {
+			page = *input.Page
+		}
+
 		if input.Print {
-			topic, err = client.ReadTopicPrint(input.Cat, input.Post, input.Page, input.Last)
+			topic, err = client.ReadTopicPrint(input.Cat, input.Post, page, input.Last)
 		} else if input.PageFrom != 0 || input.PageTo != 0 {
 			topic, err = client.ReadTopicRange(input.Cat, input.Post, input.PageFrom, input.PageTo)
 		} else {
-			page := input.Page
-			if page == 0 {
-				page = 1
-			}
 			topic, err = client.ReadTopic(input.Cat, input.Post, page)
 		}
 

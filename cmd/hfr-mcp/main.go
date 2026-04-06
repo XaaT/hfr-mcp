@@ -14,6 +14,11 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Println("hfr-mcp", hfr.Version)
+		return
+	}
+
 	cfg := config.Load()
 
 	if cfg.Login == "" || cfg.Passwd == "" {
@@ -44,7 +49,7 @@ func main() {
 	srv := mcp.NewServer(
 		&mcp.Implementation{
 			Name:    "hfr-mcp",
-			Version: "0.1.0",
+			Version: hfr.Version,
 		},
 		nil,
 	)

@@ -13,12 +13,13 @@ import (
 const usage = `Usage: hfr [--auth] <command> [args...]
 
 Commands:
-  read   <cat> <post> [page|last|from:to]  Read a topic
-  print  <cat> <post> [page] [--last N]  Read in print mode (~1000 posts/page, no signatures)
-  reply  <cat> <post> <content>           Post a reply
-  edit   <cat> <post> <numreponse> <content>  Edit a post
-  quote  <cat> <post> <numreponse>        Get quote BBCode
-  mp     <dest> <subject> <content>       Send a private message
+  read     <cat> <post> [page|last|from:to]  Read a topic
+  print    <cat> <post> [page] [--last N]    Read in print mode (~1000 posts/page)
+  reply    <cat> <post> <content>             Post a reply
+  edit     <cat> <post> <numreponse> <content>  Edit a post
+  quote    <cat> <post> <numreponse>          Get quote BBCode
+  mp       <dest> <subject> <content>         Send a private message
+  version                                     Show version
 
 Options:
   --auth    Login before executing. Required for reply, edit, quote, mp.
@@ -44,6 +45,11 @@ func main() {
 
 	cmd := args[0]
 	args = args[1:]
+
+	if cmd == "version" {
+		fmt.Println("hfr", hfr.Version)
+		return
+	}
 
 	needsAuth := cmd != "read" && cmd != "print"
 	if needsAuth {

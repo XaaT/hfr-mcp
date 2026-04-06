@@ -55,6 +55,7 @@ func (c *Client) ReadTopicPrint(cat, postId, page, last int) (*Topic, error) {
 		if err != nil {
 			return nil, err
 		}
+		topic.TotalPages = first.TotalPages
 		if last > 0 && len(topic.Posts) > last {
 			topic.Posts = topic.Posts[len(topic.Posts)-last:]
 		}
@@ -82,7 +83,12 @@ func (c *Client) ReadTopic(cat, postId, page int) (*Topic, error) {
 		if first.TotalPages <= 1 {
 			return first, nil
 		}
-		return c.readSinglePage(cat, postId, first.TotalPages)
+		topic, err := c.readSinglePage(cat, postId, first.TotalPages)
+		if err != nil {
+			return nil, err
+		}
+		topic.TotalPages = first.TotalPages
+		return topic, nil
 	}
 	return c.readSinglePage(cat, postId, page)
 }
@@ -105,6 +111,9 @@ func (c *Client) ReadTopicRange(cat, postId, from, to int) (*Topic, error) {
 		}
 		if from < 1 {
 			from = 1
+		}
+		if to < 1 {
+			to = 1
 		}
 	}
 
