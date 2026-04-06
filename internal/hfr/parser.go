@@ -73,6 +73,106 @@ func parseTotalPages(doc *goquery.Document) int {
 	return max
 }
 
+// parseListTotalPages extracts page count from a category listing (liste_sujet-N.htm links)
+func parseListTotalPages(doc *goquery.Document) int {
+	max := 1
+	doc.Find("td.padding a[href]").Each(func(i int, s *goquery.Selection) {
+		href, _ := s.Attr("href")
+		if !strings.Contains(href, "liste_sujet-") {
+			return
+		}
+		// liste_sujet-N.htm
+		idx := strings.LastIndex(href, "-")
+		if idx == -1 {
+			return
+		}
+		suffix := href[idx+1:]
+		dotIdx := strings.Index(suffix, ".")
+		if dotIdx == -1 {
+			return
+		}
+		if n, err := strconv.Atoi(suffix[:dotIdx]); err == nil && n > max {
+			max = n
+		}
+	})
+	return max
+}
+
+// parseTopicList extracts topics from a forum1.php category listing page
+func parseTopicList(doc *goquery.Document) []TopicListItem {
+	var topics []TopicListItem
+
+	doc.Find("tr.sujet").Each(func(i int, row *goquery.Selection) {
+		item := TopicListItem{}
+		item.Sticky = row.HasClass("ligne_sticky")
+
+		// Title + PostID from sujetCase3
+		titleLink := row.Find("td.sujetCase3 a.cCatTopic").First()
+		if titleLink.Length() == 0 {
+			return
+		}
+		item.Title = strings.TrimSpace(titleLink.Text())
+
+		// PostID from title attribute "Sujet n°XXXXX" or from URL
+		if titleAttr, exists := titleLink.Attr("title"); exists {
+			if strings.HasPrefix(titleAttr, "Sujet n") {
+				// "Sujet n°XXXXX" — extract digits after the last non-digit
+				numStr := ""
+				for j := len(titleAttr) - 1; j >= 0; j-- {
+					if titleAttr[j] >= '0' && titleAttr[j] <= '9' {
+						numStr = string(titleAttr[j]) + numStr
+					} else if numStr != "" {
+						break
+					}
+				}
+				item.PostID, _ = strconv.Atoi(numStr)
+			}
+		}
+
+		// Author from sujetCase6
+		item.Author = strings.TrimSpace(row.Find("td.sujetCase6").Text())
+
+		// Replies from sujetCase7
+		repliesStr := strings.TrimSpace(row.Find("td.sujetCase7").Text())
+		item.Replies, _ = strconv.Atoi(repliesStr)
+
+		// Views from sujetCase8
+		viewsStr := strings.TrimSpace(row.Find("td.sujetCase8").Text())
+		item.Views, _ = strconv.Atoi(viewsStr)
+
+		// Last page from sujetCase4 link text
+		lastPageStr := strings.TrimSpace(row.Find("td.sujetCase4 a").Text())
+		if lastPageStr != "" {
+			item.LastPage, _ = strconv.Atoi(lastPageStr)
+		} else {
+			item.LastPage = 1
+		}
+
+		// Last message from sujetCase9
+		lastCell := row.Find("td.sujetCase9 a")
+		if lastCell.Length() > 0 {
+			// Date is text before <b>, author is in <b>
+			item.LastAuthor = strings.TrimSpace(lastCell.Find("b").Text())
+			fullText := strings.TrimSpace(lastCell.Text())
+			// Remove author from end to get date
+			if item.LastAuthor != "" {
+				idx := strings.LastIndex(fullText, item.LastAuthor)
+				if idx > 0 {
+					item.LastDate = strings.TrimSpace(fullText[:idx])
+				}
+			}
+			// Clean up nbsp
+			item.LastDate = strings.ReplaceAll(item.LastDate, "\u00a0", " ")
+		}
+
+		if item.PostID > 0 {
+			topics = append(topics, item)
+		}
+	})
+
+	return topics
+}
+
 // parsePosts extracts posts from a topic page
 func parsePosts(doc *goquery.Document) []Post {
 	var posts []Post

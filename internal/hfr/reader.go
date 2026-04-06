@@ -156,6 +156,28 @@ func (c *Client) ReadTopicRange(cat, postId, from, to int) (*Topic, error) {
 	return merged, nil
 }
 
+// ListTopics fetches the topic listing for a category/subcategory.
+func (c *Client) ListTopics(cat, subcat, page int) (*TopicList, error) {
+	if page < 1 {
+		page = 1
+	}
+	listURL := fmt.Sprintf("%s/forum1.php?config=hfr.inc&cat=%d&subcat=%d&page=%d&sondage=0&owntopic=0&trash=0&trash_post=0&moderation=0&new=0&nojs=0&subcatgroup=0",
+		baseURL, cat, subcat, page)
+
+	doc, err := c.doGet(listURL)
+	if err != nil {
+		return nil, fmt.Errorf("list topics failed: %w", err)
+	}
+
+	return &TopicList{
+		Cat:        cat,
+		Subcat:     subcat,
+		Page:       page,
+		TotalPages: parseListTotalPages(doc),
+		Topics:     parseTopicList(doc),
+	}, nil
+}
+
 // FetchQuote retrieves the BBCode quote for one or more messages via HFR's message.php reply page.
 // For multiple numreponses, it sets the multiquote cookie so HFR returns all quotes in a single request.
 func (c *Client) FetchQuote(cat, postId int, numreponses ...int) (string, error) {

@@ -13,6 +13,7 @@ import (
 const usage = `Usage: hfr [--auth] <command> [args...]
 
 Commands:
+  topics   <cat> [subcat] [page]               List topics in a category
   read     <cat> <post> [page|last|from:to]  Read a topic
   print    <cat> <post> [page] [--last N]    Read in print mode (~1000 posts/page)
   reply    <cat> <post> <content>             Post a reply
@@ -51,7 +52,7 @@ func main() {
 		return
 	}
 
-	needsAuth := cmd != "read" && cmd != "print"
+	needsAuth := cmd != "read" && cmd != "print" && cmd != "topics"
 	if needsAuth {
 		auth = true
 	}
@@ -69,6 +70,8 @@ func main() {
 	}
 
 	switch cmd {
+	case "topics":
+		cmdTopics(client, args)
 	case "read":
 		cmdRead(client, args)
 	case "print":
@@ -83,6 +86,35 @@ func main() {
 		cmdMP(client, args)
 	default:
 		die("unknown command: %s\n\n%s", cmd, usage)
+	}
+}
+
+func cmdTopics(client *hfr.Client, args []string) {
+	if len(args) < 1 {
+		die("usage: hfr topics <cat> [subcat] [page]")
+	}
+	cat := mustInt(args[0], "cat")
+	subcat := 0
+	page := 1
+	if len(args) >= 2 {
+		subcat = mustInt(args[1], "subcat")
+	}
+	if len(args) >= 3 {
+		page = mustInt(args[2], "page")
+	}
+
+	list, err := client.ListTopics(cat, subcat, page)
+	if err != nil {
+		die("list topics failed: %v", err)
+	}
+
+	fmt.Printf("Topics cat=%d subcat=%d page=%d/%d (%d topics)\n\n", list.Cat, list.Subcat, list.Page, list.TotalPages, len(list.Topics))
+	for _, t := range list.Topics {
+		sticky := ""
+		if t.Sticky {
+			sticky = " [sticky]"
+		}
+		fmt.Printf("  %-6d %-60s %5d rep  %3d p  %s%s\n", t.PostID, t.Title, t.Replies, t.LastPage, t.LastAuthor, sticky)
 	}
 }
 

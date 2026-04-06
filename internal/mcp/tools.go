@@ -39,6 +39,12 @@ type MPInput struct {
 	Content string `json:"content" jsonschema:"Contenu du message en BBCode HFR"`
 }
 
+type TopicsInput struct {
+	Cat    int `json:"cat" jsonschema:"Numero de categorie HFR"`
+	Subcat int `json:"subcat,omitempty" jsonschema:"Numero de sous-categorie (0 = toutes)"`
+	Page   int `json:"page,omitempty" jsonschema:"Numero de page (defaut 1)"`
+}
+
 type QuoteInput struct {
 	Cat         int   `json:"cat" jsonschema:"Numero de categorie HFR"`
 	Post        int   `json:"post" jsonschema:"Numero du topic"`
@@ -60,6 +66,11 @@ func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 		Name:        "hfr_read",
 		Description: "Lire un topic HFR. page defaut 1 si omis, page=0 pour la derniere page. page_from/page_to pour lire plusieurs pages en parallele (valeurs negatives = relatif a la fin, 0 = derniere). print=true pour le mode impression (~1000 posts/page, sans signatures). last=N pour garder les N derniers posts (print uniquement).",
 	}, handleRead(client, login))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "hfr_topics",
+		Description: "Lister les topics d'une categorie HFR. Retourne titre, auteur, reponses, vues, dernier message. subcat=0 pour toutes les sous-categories.",
+	}, handleTopics(client))
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_reply",
@@ -152,6 +163,20 @@ func handleQuote(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[QuoteIn
 			return nil, Result{}, fmt.Errorf("quote failed: %w", err)
 		}
 		return nil, Result{Message: bbcode}, nil
+	}
+}
+
+func handleTopics(client *hfr.Client) mcp.ToolHandlerFor[TopicsInput, Result] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input TopicsInput) (*mcp.CallToolResult, Result, error) {
+		page := input.Page
+		if page < 1 {
+			page = 1
+		}
+		list, err := client.ListTopics(input.Cat, input.Subcat, page)
+		if err != nil {
+			return nil, Result{}, fmt.Errorf("list topics failed: %w", err)
+		}
+		return nil, Result{Message: formatTopicList(list)}, nil
 	}
 }
 
