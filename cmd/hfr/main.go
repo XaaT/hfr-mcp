@@ -55,7 +55,7 @@ func main() {
 		return
 	}
 
-	needsAuth := cmd != "read" && cmd != "print" && cmd != "topics"
+	needsAuth := cmd != "read" && cmd != "print" && cmd != "topics" && cmd != "cats" && cmd != "version"
 	if needsAuth {
 		auth = true
 	}
@@ -289,7 +289,10 @@ func cmdEdit(client *hfr.Client, args []string) {
 }
 
 func readContent(args []string) string {
-	if len(args) >= 2 && args[0] == "--file" {
+	if len(args) >= 1 && args[0] == "--file" {
+		if len(args) < 2 {
+			die("--file requires a path argument")
+		}
 		path := args[1]
 		var data []byte
 		var err error
@@ -366,7 +369,7 @@ func openOutput(path string) *os.File {
 	if path == "" {
 		return os.Stdout
 	}
-	f, err := os.Create(path)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		die("create output file failed: %v", err)
 	}

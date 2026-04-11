@@ -1,7 +1,5 @@
 package hfr
 
-import "html"
-
 // Category represents an HFR forum category
 type Category struct {
 	ID   int    `json:"id"`
@@ -47,8 +45,6 @@ func Categories() []Category {
 
 // SubCategories returns the hardcoded list of HFR subcategories.
 func SubCategories() []SubCategory {
-	h := html.UnescapeString
-	_ = h
 	subs := []SubCategory{
 		// Hardware (1)
 		{108, 1, "Carte mère", "carte-mere", "Hardware"},
