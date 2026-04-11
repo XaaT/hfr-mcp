@@ -183,9 +183,9 @@ func cmdRead(client *hfr.Client, args []string) {
 	out := openOutput(outFile)
 	defer closeOutput(out, outFile)
 
-	fmt.Fprintf(out, "Topic cat=%d post=%d page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
+	_, _ = fmt.Fprintf(out, "Topic cat=%d post=%d page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
 	for _, p := range topic.Posts {
-		fmt.Fprintf(out, "--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
+		_, _ = fmt.Fprintf(out, "--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
 	}
 }
 
@@ -218,9 +218,9 @@ func cmdPrint(client *hfr.Client, args []string) {
 	out := openOutput(outFile)
 	defer closeOutput(out, outFile)
 
-	fmt.Fprintf(out, "Topic cat=%d post=%d print_page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
+	_, _ = fmt.Fprintf(out, "Topic cat=%d post=%d print_page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
 	for _, p := range topic.Posts {
-		fmt.Fprintf(out, "--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
+		_, _ = fmt.Fprintf(out, "--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
 	}
 }
 
@@ -378,7 +378,7 @@ func openOutput(path string) *os.File {
 
 func closeOutput(f *os.File, path string) {
 	if path != "" {
-		f.Close()
+		_ = f.Close()
 		fmt.Fprintf(os.Stderr, "Output written to %s\n", path)
 	}
 }

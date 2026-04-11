@@ -225,7 +225,7 @@ func handleCats() mcp.ToolHandlerFor[CatsInput, Result] {
 			for _, sc := range subs {
 				lines = append(lines, fmt.Sprintf("  subcat=%-4d %s", sc.ID, sc.Name))
 			}
-			return nil, Result{Message: fmt.Sprintf("%s", joinLines(lines))}, nil
+			return nil, Result{Message: joinLines(lines)}, nil
 		}
 
 		cats := hfr.Categories()
