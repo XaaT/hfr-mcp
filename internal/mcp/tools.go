@@ -52,6 +52,10 @@ type CreateTopicInput struct {
 	Content string `json:"content" jsonschema:"Contenu du premier post en BBCode HFR"`
 }
 
+type CatsInput struct {
+	Cat int `json:"cat,omitempty" jsonschema:"Filtrer par categorie (0 = toutes les categories avec leurs sous-categories)"`
+}
+
 type QuoteInput struct {
 	Cat         int   `json:"cat" jsonschema:"Numero de categorie HFR"`
 	Post        int   `json:"post" jsonschema:"Numero du topic"`
@@ -93,6 +97,11 @@ func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 		Name:        "hfr_mp",
 		Description: "Envoyer un message prive sur HFR.",
 	}, handleMP(client, login))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "hfr_cats",
+		Description: "Lister les categories et sous-categories HFR. Sans parametre: toutes les categories. Avec cat=N: les sous-categories de cette categorie.",
+	}, handleCats())
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_create_topic",
@@ -190,6 +199,43 @@ func handleTopics(client *hfr.Client) mcp.ToolHandlerFor[TopicsInput, Result] {
 		}
 		return nil, Result{Message: formatTopicList(list)}, nil
 	}
+}
+
+func handleCats() mcp.ToolHandlerFor[CatsInput, Result] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input CatsInput) (*mcp.CallToolResult, Result, error) {
+		if input.Cat > 0 {
+			subs := hfr.SubCategoriesForCat(input.Cat)
+			if len(subs) == 0 {
+				return nil, Result{}, fmt.Errorf("no subcategories for cat %d", input.Cat)
+			}
+			var lines []string
+			lines = append(lines, fmt.Sprintf("Sous-categories de %s (cat=%d):\n", subs[0].CatName, input.Cat))
+			for _, sc := range subs {
+				lines = append(lines, fmt.Sprintf("  subcat=%-4d %s", sc.ID, sc.Name))
+			}
+			return nil, Result{Message: fmt.Sprintf("%s", joinLines(lines))}, nil
+		}
+
+		cats := hfr.Categories()
+		var lines []string
+		lines = append(lines, fmt.Sprintf("Categories HFR (%d):\n", len(cats)))
+		for _, c := range cats {
+			subs := hfr.SubCategoriesForCat(c.ID)
+			lines = append(lines, fmt.Sprintf("cat=%-3d %s (%d sous-cats)", c.ID, c.Name, len(subs)))
+		}
+		return nil, Result{Message: joinLines(lines)}, nil
+	}
+}
+
+func joinLines(lines []string) string {
+	result := ""
+	for i, l := range lines {
+		if i > 0 {
+			result += "\n"
+		}
+		result += l
+	}
+	return result
 }
 
 func handleCreateTopic(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[CreateTopicInput, Result] {

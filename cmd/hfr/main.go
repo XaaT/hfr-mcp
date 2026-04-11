@@ -14,6 +14,7 @@ import (
 const usage = `Usage: hfr [--auth] <command> [args...]
 
 Commands:
+  cats     [cat]                               List categories (or subcats for a cat)
   topics   <cat> [subcat] [page]               List topics in a category
   read     <cat> <post> [page|last|from:to]  Read a topic
   print    <cat> <post> [page] [--last N]    Read in print mode (~1000 posts/page)
@@ -72,6 +73,8 @@ func main() {
 	}
 
 	switch cmd {
+	case "cats":
+		cmdCats(args)
 	case "topics":
 		cmdTopics(client, args)
 	case "read":
@@ -90,6 +93,28 @@ func main() {
 		cmdMP(client, args)
 	default:
 		die("unknown command: %s\n\n%s", cmd, usage)
+	}
+}
+
+func cmdCats(args []string) {
+	if len(args) >= 1 {
+		cat := mustInt(args[0], "cat")
+		subs := hfr.SubCategoriesForCat(cat)
+		if len(subs) == 0 {
+			die("no subcategories for cat %d", cat)
+		}
+		fmt.Printf("Sous-categories de %s (cat=%d):\n\n", subs[0].CatName, cat)
+		for _, sc := range subs {
+			fmt.Printf("  %-4d %s\n", sc.ID, sc.Name)
+		}
+		return
+	}
+
+	cats := hfr.Categories()
+	fmt.Printf("Categories HFR (%d):\n\n", len(cats))
+	for _, c := range cats {
+		subs := hfr.SubCategoriesForCat(c.ID)
+		fmt.Printf("  %-3d %-40s (%d sous-cats)\n", c.ID, c.Name, len(subs))
 	}
 }
 
