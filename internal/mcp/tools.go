@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/XaaT/hfr-mcp/internal/hfr"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -11,13 +12,14 @@ import (
 // Input structs — le SDK derive le JSON schema automatiquement
 
 type ReadInput struct {
-	Cat      int  `json:"cat" jsonschema:"Numero de categorie HFR"`
-	Post     int  `json:"post" jsonschema:"Numero du topic"`
-	Page     *int `json:"page,omitempty" jsonschema:"Numero de page (defaut 1, 0 pour la derniere)"`
-	PageFrom int  `json:"page_from,omitempty" jsonschema:"Debut de range (negatif = relatif a la fin, ex: -9)"`
-	PageTo   int  `json:"page_to,omitempty" jsonschema:"Fin de range (0 = derniere page)"`
-	Print    bool `json:"print,omitempty" jsonschema:"Mode impression: ~1000 posts/page, sans signatures"`
-	Last     int  `json:"last,omitempty" jsonschema:"Garder seulement les N derniers posts (avec print)"`
+	Cat      int    `json:"cat" jsonschema:"Numero de categorie HFR"`
+	Post     int    `json:"post" jsonschema:"Numero du topic"`
+	Page     *int   `json:"page,omitempty" jsonschema:"Numero de page (defaut 1, 0 pour la derniere)"`
+	PageFrom int    `json:"page_from,omitempty" jsonschema:"Debut de range (negatif = relatif a la fin, ex: -9)"`
+	PageTo   int    `json:"page_to,omitempty" jsonschema:"Fin de range (0 = derniere page)"`
+	Print    bool   `json:"print,omitempty" jsonschema:"Mode impression: ~1000 posts/page, sans signatures"`
+	Last     int    `json:"last,omitempty" jsonschema:"Garder seulement les N derniers posts (avec print)"`
+	Output   string `json:"output,omitempty" jsonschema:"Chemin fichier de sortie. Si fourni, ecrit dans le fichier au lieu de retourner dans le contexte. Utile pour les gros volumes."`
 }
 
 type ReplyInput struct {
@@ -75,7 +77,7 @@ type LoginFunc func() error
 func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_read",
-		Description: "Lire un topic HFR. page defaut 1 si omis, page=0 pour la derniere page. page_from/page_to pour lire plusieurs pages en parallele (valeurs negatives = relatif a la fin, 0 = derniere). print=true pour le mode impression (~1000 posts/page, sans signatures). last=N pour garder les N derniers posts (print uniquement).",
+		Description: "Lire un topic HFR. page defaut 1 si omis, page=0 pour la derniere page. page_from/page_to pour lire plusieurs pages en parallele (valeurs negatives = relatif a la fin, 0 = derniere). print=true pour le mode impression (~1000 posts/page, sans signatures). last=N pour garder les N derniers posts (print uniquement). output=chemin pour ecrire dans un fichier au lieu du contexte (utile pour les gros volumes).",
 	}, handleRead(client, login))
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -139,7 +141,17 @@ func handleRead(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReadInpu
 		if err != nil {
 			return nil, Result{}, fmt.Errorf("read failed: %w", err)
 		}
-		return nil, Result{Message: formatTopic(topic)}, nil
+
+		content := formatTopic(topic)
+
+		if input.Output != "" {
+			if err := writeOutputFile(input.Output, content); err != nil {
+				return nil, Result{}, fmt.Errorf("write output failed: %w", err)
+			}
+			return nil, Result{Message: fmt.Sprintf("Output written to %s (%d posts, %d bytes)", input.Output, len(topic.Posts), len(content))}, nil
+		}
+
+		return nil, Result{Message: content}, nil
 	}
 }
 
@@ -225,6 +237,10 @@ func handleCats() mcp.ToolHandlerFor[CatsInput, Result] {
 		}
 		return nil, Result{Message: joinLines(lines)}, nil
 	}
+}
+
+func writeOutputFile(path, content string) error {
+	return os.WriteFile(path, []byte(content), 0644)
 }
 
 func joinLines(lines []string) string {

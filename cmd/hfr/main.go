@@ -16,8 +16,8 @@ const usage = `Usage: hfr [--auth] <command> [args...]
 Commands:
   cats     [cat]                               List categories (or subcats for a cat)
   topics   <cat> [subcat] [page]               List topics in a category
-  read     <cat> <post> [page|last|from:to]  Read a topic
-  print    <cat> <post> [page] [--last N]    Read in print mode (~1000 posts/page)
+  read     <cat> <post> [page|last|from:to] [-o file]  Read a topic
+  print    <cat> <post> [page] [--last N] [-o file]  Read in print mode (~1000 posts/page)
   new      <cat> <subcat> <subject> <content|--file path>  Create a new topic
   reply    <cat> <post> <content|--file path>             Post a reply
   edit     <cat> <post> <numreponse> <content|--file path>  Edit a post
@@ -149,8 +149,10 @@ func cmdTopics(client *hfr.Client, args []string) {
 
 func cmdRead(client *hfr.Client, args []string) {
 	if len(args) < 2 {
-		die("usage: hfr read <cat> <post> [page|last|from-to|last-N:last]")
+		die("usage: hfr read <cat> <post> [page|last|from-to|last-N:last] [-o file]")
 	}
+
+	args, outFile := extractOutputFlag(args)
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
 
@@ -178,16 +180,21 @@ func cmdRead(client *hfr.Client, args []string) {
 		die("read failed: %v", err)
 	}
 
-	fmt.Printf("Topic cat=%d post=%d page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
+	out := openOutput(outFile)
+	defer closeOutput(out, outFile)
+
+	fmt.Fprintf(out, "Topic cat=%d post=%d page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
 	for _, p := range topic.Posts {
-		fmt.Printf("--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
+		fmt.Fprintf(out, "--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
 	}
 }
 
 func cmdPrint(client *hfr.Client, args []string) {
 	if len(args) < 2 {
-		die("usage: hfr print <cat> <post> [page] [--last N]")
+		die("usage: hfr print <cat> <post> [page] [--last N] [-o file]")
 	}
+
+	args, outFile := extractOutputFlag(args)
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
 	page := 0 // default: last print page
@@ -208,9 +215,12 @@ func cmdPrint(client *hfr.Client, args []string) {
 		die("print read failed: %v", err)
 	}
 
-	fmt.Printf("Topic cat=%d post=%d print_page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
+	out := openOutput(outFile)
+	defer closeOutput(out, outFile)
+
+	fmt.Fprintf(out, "Topic cat=%d post=%d print_page=%d/%d (%d posts)\n\n", topic.Cat, topic.Post, topic.Page, topic.TotalPages, len(topic.Posts))
 	for _, p := range topic.Posts {
-		fmt.Printf("--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
+		fmt.Fprintf(out, "--- #%d | %s | %s ---\n%s\n\n", p.Numreponse, p.Author, p.Date, strings.TrimSpace(p.Content))
 	}
 }
 
@@ -337,6 +347,37 @@ func mustInt(s, name string) int {
 		die("invalid %s: %q (expected integer)", name, s)
 	}
 	return n
+}
+
+func extractOutputFlag(args []string) ([]string, string) {
+	for i, a := range args {
+		if a == "-o" && i+1 < len(args) {
+			outFile := args[i+1]
+			remaining := make([]string, 0, len(args)-2)
+			remaining = append(remaining, args[:i]...)
+			remaining = append(remaining, args[i+2:]...)
+			return remaining, outFile
+		}
+	}
+	return args, ""
+}
+
+func openOutput(path string) *os.File {
+	if path == "" {
+		return os.Stdout
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		die("create output file failed: %v", err)
+	}
+	return f
+}
+
+func closeOutput(f *os.File, path string) {
+	if path != "" {
+		f.Close()
+		fmt.Fprintf(os.Stderr, "Output written to %s\n", path)
+	}
 }
 
 func die(format string, args ...any) {
