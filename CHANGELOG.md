@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0] - 2026-04-11
+
+### Features
+- `hfr_topics` / `hfr topics`: list topics in a category (#13)
+- `hfr_cats` / `hfr cats`: list all categories and subcategories (#23)
+- `hfr_create_topic` / `hfr new`: create a new topic in any category
+- `--file` flag: read content from a file or stdin for new/reply/edit commands
+- `-o` flag: write read/print output to a file instead of stdout/context (#22)
+- Output file mode in MCP: `output` parameter on `hfr_read` writes to file and returns summary
+
+### Infrastructure
+- Release workflow: cross-compiled binaries for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64
+
+### Docs
+- README rewritten in French with Mermaid roadmap chart
+
 ## [1.0.0] - 2025-04-06
 
 First stable release. Full MCP server + CLI for forum.hardware.fr.
