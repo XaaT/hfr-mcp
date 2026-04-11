@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -16,9 +17,9 @@ Commands:
   topics   <cat> [subcat] [page]               List topics in a category
   read     <cat> <post> [page|last|from:to]  Read a topic
   print    <cat> <post> [page] [--last N]    Read in print mode (~1000 posts/page)
-  new      <cat> <subcat> <subject> <content>  Create a new topic
-  reply    <cat> <post> <content>             Post a reply
-  edit     <cat> <post> <numreponse> <content>  Edit a post
+  new      <cat> <subcat> <subject> <content|--file path>  Create a new topic
+  reply    <cat> <post> <content|--file path>             Post a reply
+  edit     <cat> <post> <numreponse> <content|--file path>  Edit a post
   quote    <cat> <post> <numreponse>          Get quote BBCode
   mp       <dest> <subject> <content>         Send a private message
   version                                     Show version
@@ -210,12 +211,12 @@ func parsePageRef(s string) int {
 
 func cmdNewTopic(client *hfr.Client, args []string) {
 	if len(args) < 4 {
-		die("usage: hfr new <cat> <subcat> <subject> <content>")
+		die("usage: hfr new <cat> <subcat> <subject> <content|--file path>")
 	}
 	cat := mustInt(args[0], "cat")
 	subcat := mustInt(args[1], "subcat")
 	subject := args[2]
-	content := strings.Join(args[3:], " ")
+	content := readContent(args[3:])
 
 	if err := client.CreateTopic(cat, subcat, subject, content); err != nil {
 		die("create topic failed: %v", err)
@@ -225,11 +226,11 @@ func cmdNewTopic(client *hfr.Client, args []string) {
 
 func cmdReply(client *hfr.Client, args []string) {
 	if len(args) < 3 {
-		die("usage: hfr reply <cat> <post> <content>")
+		die("usage: hfr reply <cat> <post> <content|--file path>")
 	}
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
-	content := strings.Join(args[2:], " ")
+	content := readContent(args[2:])
 
 	if err := client.Reply(cat, post, content); err != nil {
 		die("reply failed: %v", err)
@@ -239,17 +240,38 @@ func cmdReply(client *hfr.Client, args []string) {
 
 func cmdEdit(client *hfr.Client, args []string) {
 	if len(args) < 4 {
-		die("usage: hfr edit <cat> <post> <numreponse> <content>")
+		die("usage: hfr edit <cat> <post> <numreponse> <content|--file path>")
 	}
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
 	numreponse := mustInt(args[2], "numreponse")
-	content := strings.Join(args[3:], " ")
+	content := readContent(args[3:])
 
 	if err := client.Edit(cat, post, numreponse, content); err != nil {
 		die("edit failed: %v", err)
 	}
 	fmt.Println("Post edited.")
+}
+
+func readContent(args []string) string {
+	if len(args) >= 2 && args[0] == "--file" {
+		path := args[1]
+		var data []byte
+		var err error
+		if path == "-" {
+			data, err = io.ReadAll(os.Stdin)
+		} else {
+			data, err = os.ReadFile(path)
+		}
+		if err != nil {
+			die("read file failed: %v", err)
+		}
+		return strings.TrimRight(string(data), "\n")
+	}
+	if len(args) == 0 {
+		die("content required: provide text or --file <path>")
+	}
+	return strings.Join(args, " ")
 }
 
 func cmdQuote(client *hfr.Client, args []string) {
