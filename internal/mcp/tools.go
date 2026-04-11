@@ -45,6 +45,13 @@ type TopicsInput struct {
 	Page   int `json:"page,omitempty" jsonschema:"Numero de page (defaut 1)"`
 }
 
+type CreateTopicInput struct {
+	Cat     int    `json:"cat" jsonschema:"Numero de categorie HFR"`
+	Subcat  int    `json:"subcat" jsonschema:"Numero de sous-categorie HFR"`
+	Subject string `json:"subject" jsonschema:"Titre du topic"`
+	Content string `json:"content" jsonschema:"Contenu du premier post en BBCode HFR"`
+}
+
 type QuoteInput struct {
 	Cat         int   `json:"cat" jsonschema:"Numero de categorie HFR"`
 	Post        int   `json:"post" jsonschema:"Numero du topic"`
@@ -86,6 +93,11 @@ func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 		Name:        "hfr_mp",
 		Description: "Envoyer un message prive sur HFR.",
 	}, handleMP(client, login))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "hfr_create_topic",
+		Description: "Creer un nouveau topic sur HFR. Necessite cat, subcat, subject et content.",
+	}, handleCreateTopic(client, login))
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:        "hfr_quote",
@@ -177,6 +189,18 @@ func handleTopics(client *hfr.Client) mcp.ToolHandlerFor[TopicsInput, Result] {
 			return nil, Result{}, fmt.Errorf("list topics failed: %w", err)
 		}
 		return nil, Result{Message: formatTopicList(list)}, nil
+	}
+}
+
+func handleCreateTopic(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[CreateTopicInput, Result] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input CreateTopicInput) (*mcp.CallToolResult, Result, error) {
+		if err := login(); err != nil {
+			return nil, Result{}, fmt.Errorf("login failed: %w", err)
+		}
+		if err := client.CreateTopic(input.Cat, input.Subcat, input.Subject, input.Content); err != nil {
+			return nil, Result{}, fmt.Errorf("create topic failed: %w", err)
+		}
+		return nil, Result{Message: "Topic cree avec succes."}, nil
 	}
 }
 

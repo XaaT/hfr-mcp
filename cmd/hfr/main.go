@@ -16,6 +16,7 @@ Commands:
   topics   <cat> [subcat] [page]               List topics in a category
   read     <cat> <post> [page|last|from:to]  Read a topic
   print    <cat> <post> [page] [--last N]    Read in print mode (~1000 posts/page)
+  new      <cat> <subcat> <subject> <content>  Create a new topic
   reply    <cat> <post> <content>             Post a reply
   edit     <cat> <post> <numreponse> <content>  Edit a post
   quote    <cat> <post> <numreponse>          Get quote BBCode
@@ -23,7 +24,7 @@ Commands:
   version                                     Show version
 
 Options:
-  --auth    Login before executing. Required for reply, edit, quote, mp.
+  --auth    Login before executing. Required for new, reply, edit, quote, mp.
 
 Config: ./hfr.conf or ~/.config/hfr/config (login=, passwd=)
 Env vars HFR_LOGIN/HFR_PASSWD override config file.`
@@ -76,6 +77,8 @@ func main() {
 		cmdRead(client, args)
 	case "print":
 		cmdPrint(client, args)
+	case "new":
+		cmdNewTopic(client, args)
 	case "reply":
 		cmdReply(client, args)
 	case "edit":
@@ -203,6 +206,21 @@ func parsePageRef(s string) int {
 		return -n
 	}
 	return mustInt(s, "page")
+}
+
+func cmdNewTopic(client *hfr.Client, args []string) {
+	if len(args) < 4 {
+		die("usage: hfr new <cat> <subcat> <subject> <content>")
+	}
+	cat := mustInt(args[0], "cat")
+	subcat := mustInt(args[1], "subcat")
+	subject := args[2]
+	content := strings.Join(args[3:], " ")
+
+	if err := client.CreateTopic(cat, subcat, subject, content); err != nil {
+		die("create topic failed: %v", err)
+	}
+	fmt.Println("Topic created.")
 }
 
 func cmdReply(client *hfr.Client, args []string) {
