@@ -64,6 +64,7 @@ Les structs d'entrée MCP portent des tags `jsonschema` : le SDK en dérive le s
 - Identifiants HFR : variables d'env `HFR_LOGIN` / `HFR_PASSWD` (prioritaires), sinon `./hfr.conf` puis `~/.config/hfr/config` (format `login=` / `passwd=`).
 - MCP : login *lazy* (connexion au premier appel d'outil), session conservée en mémoire pour la durée du process.
 - Les outils d'écriture (`hfr_reply`, `hfr_edit`, `hfr_mp`, `hfr_create_topic`, `hfr_quote`) exigent l'authentification ; `hfr_read`, `hfr_topics` et `hfr_cats` fonctionnent en anonyme.
+- **Garde-fou d'identité** (#32) : les écritures sont refusées par défaut tant qu'aucun compte attendu n'est déclaré (`HFR_EXPECT_LOGIN` / `expect_login=` côté serveur, `expect` MCP ou `--pseudo` CLI par appel). Comparaison par pseudo (casse ignorée) ou userId ; syntaxe typée `pseudo:` / `id:`. Opt-out historique : `HFR_ALLOW_UNGUARDED_WRITES=1`. `hfr_whoami` / `hfr whoami` expose le compte actif. L'autorité = le cookie `md_user` de session relu juste avant chaque POST.
 
 ## Conventions de contenu HFR
 

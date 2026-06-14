@@ -9,8 +9,10 @@ import (
 )
 
 type Config struct {
-	Login  string
-	Passwd string
+	Login          string
+	Passwd         string
+	ExpectLogin    string
+	AllowUnguarded bool
 }
 
 // Load reads config from files then overrides with env vars.
@@ -37,6 +39,12 @@ func Load() *Config {
 	}
 	if v := os.Getenv("HFR_PASSWD"); v != "" {
 		cfg.Passwd = v
+	}
+	if v := os.Getenv("HFR_EXPECT_LOGIN"); v != "" {
+		cfg.ExpectLogin = v
+	}
+	if os.Getenv("HFR_ALLOW_UNGUARDED_WRITES") == "1" {
+		cfg.AllowUnguarded = true
 	}
 
 	return cfg
@@ -67,6 +75,8 @@ func readFile(path string, cfg *Config) bool {
 			cfg.Login = v
 		case "passwd":
 			cfg.Passwd = v
+		case "expect_login":
+			cfg.ExpectLogin = v
 		}
 	}
 	return true
