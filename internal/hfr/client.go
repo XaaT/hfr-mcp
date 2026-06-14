@@ -50,51 +50,116 @@ func (c *Client) SetExpectedLogin(login string) { c.expectedLogin = login }
 // SetAllowUnguarded enables writes when no expected account is configured.
 func (c *Client) SetAllowUnguarded(b bool) { c.allowUnguarded = b }
 
-// Login authenticates with the forum
+// Login authenticates with the forum.
+// State is mutated only on full success; any failure leaves authed=false.
 func (c *Client) Login(pseudo, password string) error {
-	data := url.Values{
-		"pseudo":   {pseudo},
-		"password": {password},
-	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
+	data := url.Values{"pseudo": {pseudo}, "password": {password}}
 	doc, err := c.doPost("/login_validation.php?config=hfr.inc", data)
 	if err != nil {
 		return fmt.Errorf("login failed: %w", err)
 	}
-
-	body := doc.Text()
-
-	if strings.Contains(body, "Votre mot de passe ou nom d'utilisateur n'est pas valide") {
+	if strings.Contains(doc.Text(), "Votre mot de passe ou nom d'utilisateur n'est pas valide") {
 		return ErrInvalidCreds
 	}
 
-	// Check cookie
 	u, _ := url.Parse(c.baseURL)
+	found := false
 	for _, cookie := range c.http.Jar.Cookies(u) {
 		if cookie.Name == "md_user" && cookie.Value == pseudo {
-			c.pseudo = pseudo
-			c.authed = true
-			return c.fetchHashCheck()
+			found = true
+			break
 		}
 	}
+	if !found {
+		return &HfrError{Code: "auth", Message: "login failed: md_user cookie not set"}
+	}
 
-	return &HfrError{Code: "auth", Message: "login failed: md_user cookie not set"}
+	hash, userID, err := c.fetchProfile()
+	if err != nil {
+		return err // no state mutated yet
+	}
+
+	c.pseudo = pseudo
+	c.hashCheck = hash
+	c.userID = userID
+	c.authed = true
+	return nil
 }
 
-// fetchHashCheck retrieves the anti-CSRF token
-func (c *Client) fetchHashCheck() error {
+// fetchProfile loads the authenticated profile page and extracts the
+// anti-CSRF token and (best-effort) the numeric user id.
+func (c *Client) fetchProfile() (hash, userID string, err error) {
 	doc, err := c.doGet(c.baseURL + "/user/editprofil.php?config=hardwarefr.inc")
 	if err != nil {
-		return fmt.Errorf("hash_check failed: %w", err)
+		return "", "", fmt.Errorf("profile fetch failed: %w", err)
 	}
-
-	hash, exists := doc.Find("input[name=hash_check]").Attr("value")
-	if !exists || hash == "" {
-		return ErrNoHashCheck
+	hash, ok := doc.Find("input[name=hash_check]").Attr("value")
+	if !ok || hash == "" {
+		return "", "", ErrNoHashCheck
 	}
+	return hash, c.parseUserID(doc), nil
+}
 
-	c.hashCheck = hash
-	return nil
+// parseUserID resolves the numeric user id, cookie first, page fallback.
+// Returns "" if it cannot be resolved (guard then refuses id: constraints).
+func (c *Client) parseUserID(doc *goquery.Document) string {
+	u, _ := url.Parse(c.baseURL)
+	for _, ck := range c.http.Jar.Cookies(u) {
+		if ck.Name == "md_user_id" && ck.Value != "" {
+			return ck.Value
+		}
+	}
+	// Fallback: a self profile link carrying user=NNNN (adjust to live markup).
+	id := ""
+	doc.Find(`a[href*="user="]`).EachWithBreak(func(_ int, s *goquery.Selection) bool {
+		href, _ := s.Attr("href")
+		if i := strings.Index(href, "user="); i >= 0 {
+			rest := href[i+len("user="):]
+			j := 0
+			for j < len(rest) && rest[j] >= '0' && rest[j] <= '9' {
+				j++
+			}
+			if j > 0 {
+				id = rest[:j]
+				return false
+			}
+		}
+		return true
+	})
+	return id
+}
+
+// currentIdentity reads the account behind the live session (cookie authority).
+// It does not lock c.mu; callers that need atomicity hold it.
+func (c *Client) currentIdentity() (Identity, error) {
+	u, err := url.Parse(c.baseURL)
+	if err != nil {
+		return Identity{}, err
+	}
+	pseudo := ""
+	for _, ck := range c.http.Jar.Cookies(u) {
+		if ck.Name == "md_user" {
+			if v, derr := url.QueryUnescape(ck.Value); derr == nil {
+				pseudo = v
+			} else {
+				pseudo = ck.Value
+			}
+		}
+	}
+	if pseudo == "" {
+		return Identity{}, ErrNotAuthenticated
+	}
+	return Identity{Pseudo: pseudo, UserID: c.userID, Authenticated: true}, nil
+}
+
+// Whoami returns the account currently behind the session.
+func (c *Client) Whoami() (Identity, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.currentIdentity()
 }
 
 // ensureAuth checks that the client is authenticated
