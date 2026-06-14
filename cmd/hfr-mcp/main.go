@@ -28,6 +28,8 @@ func main() {
 
 	// Create HFR client (login will happen lazily on first tool call)
 	client := hfr.NewClient()
+	client.SetExpectedLogin(cfg.ExpectLogin)
+	client.SetAllowUnguarded(cfg.AllowUnguarded)
 
 	// Lazy login: only login once, on first tool call
 	var loginOnce sync.Once

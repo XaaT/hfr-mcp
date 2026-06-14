@@ -26,6 +26,7 @@ type ReplyInput struct {
 	Cat     int    `json:"cat" jsonschema:"Numero de categorie HFR"`
 	Post    int    `json:"post" jsonschema:"Numero du topic"`
 	Content string `json:"content" jsonschema:"Contenu du message en BBCode HFR"`
+	Expect  string `json:"expect,omitempty" jsonschema:"Compte attendu (pseudo, id:NNNN, ou pseudo:nom) ; l'écriture est refusée si la session ne correspond pas"`
 }
 
 type EditInput struct {
@@ -33,12 +34,14 @@ type EditInput struct {
 	Post       int    `json:"post" jsonschema:"Numero du topic"`
 	Numreponse int    `json:"numreponse" jsonschema:"Numero du message a editer"`
 	Content    string `json:"content" jsonschema:"Nouveau contenu en BBCode HFR"`
+	Expect     string `json:"expect,omitempty" jsonschema:"Compte attendu (pseudo, id:NNNN, ou pseudo:nom) ; l'écriture est refusée si la session ne correspond pas"`
 }
 
 type MPInput struct {
 	Dest    string `json:"dest" jsonschema:"Pseudo du destinataire"`
 	Subject string `json:"subject" jsonschema:"Sujet du MP"`
 	Content string `json:"content" jsonschema:"Contenu du message en BBCode HFR"`
+	Expect  string `json:"expect,omitempty" jsonschema:"Compte attendu (pseudo, id:NNNN, ou pseudo:nom) ; l'écriture est refusée si la session ne correspond pas"`
 }
 
 type TopicsInput struct {
@@ -52,6 +55,7 @@ type CreateTopicInput struct {
 	Subcat  int    `json:"subcat" jsonschema:"Numero de sous-categorie HFR"`
 	Subject string `json:"subject" jsonschema:"Titre du topic"`
 	Content string `json:"content" jsonschema:"Contenu du premier post en BBCode HFR"`
+	Expect  string `json:"expect,omitempty" jsonschema:"Compte attendu (pseudo, id:NNNN, ou pseudo:nom) ; l'écriture est refusée si la session ne correspond pas"`
 }
 
 type CatsInput struct {
@@ -64,6 +68,8 @@ type QuoteInput struct {
 	Numreponse  int   `json:"numreponse,omitempty" jsonschema:"Numero du message a citer (simple quote)"`
 	Numreponses []int `json:"numreponses,omitempty" jsonschema:"Numeros des messages a citer (multiquote)"`
 }
+
+type WhoamiInput struct{}
 
 // Output struct
 type Result struct {
@@ -114,6 +120,11 @@ func RegisterTools(srv *mcp.Server, client *hfr.Client, login LoginFunc) {
 		Name:        "hfr_quote",
 		Description: "Recuperer le BBCode de citation d'un ou plusieurs messages HFR. Utiliser numreponse pour un seul message, numreponses pour un multiquote.",
 	}, handleQuote(client, login))
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "hfr_whoami",
+		Description: "Afficher le compte HFR actif (pseudo + userId) et le compte attendu configuré.",
+	}, handleWhoami(client, login))
 }
 
 func handleRead(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReadInput, Result] {
@@ -160,10 +171,11 @@ func handleReply(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReplyIn
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
 		}
-		if err := client.Reply(input.Cat, input.Post, input.Content); err != nil {
+		id, err := client.Reply(input.Cat, input.Post, input.Content, input.Expect)
+		if err != nil {
 			return nil, Result{}, fmt.Errorf("reply failed: %w", err)
 		}
-		return nil, Result{Message: "Message poste avec succes."}, nil
+		return nil, Result{Message: fmt.Sprintf("Message posté sous %s (userId %s).", id.Pseudo, id.UserID)}, nil
 	}
 }
 
@@ -172,10 +184,11 @@ func handleEdit(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[EditInpu
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
 		}
-		if err := client.Edit(input.Cat, input.Post, input.Numreponse, input.Content); err != nil {
+		id, err := client.Edit(input.Cat, input.Post, input.Numreponse, input.Content, input.Expect)
+		if err != nil {
 			return nil, Result{}, fmt.Errorf("edit failed: %w", err)
 		}
-		return nil, Result{Message: "Message edite avec succes."}, nil
+		return nil, Result{Message: fmt.Sprintf("Message édité sous %s (userId %s).", id.Pseudo, id.UserID)}, nil
 	}
 }
 
@@ -259,10 +272,11 @@ func handleCreateTopic(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[C
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
 		}
-		if err := client.CreateTopic(input.Cat, input.Subcat, input.Subject, input.Content); err != nil {
+		id, err := client.CreateTopic(input.Cat, input.Subcat, input.Subject, input.Content, input.Expect)
+		if err != nil {
 			return nil, Result{}, fmt.Errorf("create topic failed: %w", err)
 		}
-		return nil, Result{Message: "Topic cree avec succes."}, nil
+		return nil, Result{Message: fmt.Sprintf("Topic créé sous %s (userId %s).", id.Pseudo, id.UserID)}, nil
 	}
 }
 
@@ -271,9 +285,27 @@ func handleMP(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[MPInput, R
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
 		}
-		if err := client.SendMP(input.Dest, input.Subject, input.Content); err != nil {
+		id, err := client.SendMP(input.Dest, input.Subject, input.Content, input.Expect)
+		if err != nil {
 			return nil, Result{}, fmt.Errorf("mp failed: %w", err)
 		}
-		return nil, Result{Message: "MP envoye avec succes."}, nil
+		return nil, Result{Message: fmt.Sprintf("MP envoyé sous %s (userId %s).", id.Pseudo, id.UserID)}, nil
+	}
+}
+
+func handleWhoami(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[WhoamiInput, Result] {
+	return func(ctx context.Context, req *mcp.CallToolRequest, input WhoamiInput) (*mcp.CallToolResult, Result, error) {
+		if err := login(); err != nil {
+			return nil, Result{}, fmt.Errorf("login failed: %w", err)
+		}
+		id, err := client.Whoami()
+		if err != nil {
+			return nil, Result{}, fmt.Errorf("whoami failed: %w", err)
+		}
+		expect := client.ExpectedLogin()
+		if expect == "" {
+			expect = "(non défini)"
+		}
+		return nil, Result{Message: fmt.Sprintf("Connecté : %s (userId %s). Compte attendu : %s.", id.Pseudo, id.UserID, expect)}, nil
 	}
 }
