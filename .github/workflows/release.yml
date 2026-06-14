@@ -7,6 +7,11 @@ on:
 permissions:
   contents: write
 
+# Opt the JS-based actions into Node 24 (Node 20 is deprecated on GH runners
+# from 2026-06-16). Drop this once the actions are bumped to Node 24 majors.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   release:
     runs-on: ubuntu-latest
