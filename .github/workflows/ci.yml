@@ -2,6 +2,11 @@ name: CI
 
 on: [push, pull_request]
 
+# Opt the JS-based actions into Node 24 (Node 20 is deprecated on GH runners
+# from 2026-06-16). Drop this once the actions are bumped to Node 24 majors.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   ci:
     runs-on: ubuntu-latest
