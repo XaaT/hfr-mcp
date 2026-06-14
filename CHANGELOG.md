@@ -8,9 +8,15 @@
 - `HFR_ALLOW_UNGUARDED_WRITES=1` opt-out for the historical (unguarded) behaviour.
 - New `hfr_whoami` MCP tool / `hfr whoami` CLI command: report the active account (pseudo + userId) and the expected account.
 - Write results now report the account effectively used.
+- Email-notify subscription control on reply (#31): `hfr_reply` preserves the topic's email-notification state instead of silently unsubscribing, and can change it — `notify` MCP parameter / `--notify on|off` CLI flag (empty = keep). Invalid values are rejected before posting. The reply result reports the effective subscription state.
 
 ### Fixes
 - Login hardening: client state is mutated only on full success — a failed `hash_check`/profile fetch no longer leaves a half-authenticated client.
+- `hfr_reply` no longer disables the topic's email notification when posting (#31).
+
+### Infrastructure
+- Dependency: `modelcontextprotocol/go-sdk` 1.4.1 → 1.6.1.
+- CI/Release workflows opt JS actions into Node 24 (Node 20 deprecated on GitHub runners from 2026-06-16).
 
 ## [1.1.0] - 2026-04-11
 
