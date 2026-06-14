@@ -159,7 +159,15 @@ func (c *Client) currentIdentity() (Identity, error) {
 	if pseudo == "" {
 		return Identity{}, ErrNotAuthenticated
 	}
-	return Identity{Pseudo: pseudo, UserID: c.userID, Authenticated: true}, nil
+	// c.userID was resolved for c.pseudo at login and is never refreshed. If the
+	// live md_user cookie has drifted to another account, the cached userID is no
+	// longer trustworthy — drop it so `id:` constraints fail-closed (error: userId
+	// unresolved) instead of matching the stale id of a different session.
+	userID := c.userID
+	if !strings.EqualFold(pseudo, c.pseudo) {
+		userID = ""
+	}
+	return Identity{Pseudo: pseudo, UserID: userID, Authenticated: true}, nil
 }
 
 // Whoami returns the account currently behind the session.
@@ -252,6 +260,15 @@ func (c *Client) doGet(fullURL string) (*goquery.Document, error) {
 // only then POSTs. Returns the identity used. The identity check and the POST
 // are atomic; any pre-fetch GET (e.g. Edit's edit-page load) is intentionally
 // outside this lock — the guard still re-checks immediately before the POST.
+//
+// Concurrency assumption: the cookie jar is shared, and reads/pre-fetch GETs run
+// outside c.mu. The check+POST is only truly atomic against the jar if no other
+// goroutine mutates the session cookies in between. In practice this holds: login
+// runs once (sync.Once on the MCP server; single-threaded on the CLI) and HFR does
+// not re-issue md_user on read GETs, so the session identity is immutable for the
+// process lifetime — concurrent GETs cannot change who the POST authenticates as.
+// Closing this structurally (pinning the verified cookies onto the POST, or
+// serializing jar access) is tracked as follow-up hardening of the #32 guard.
 func (c *Client) authenticatedPost(endpoint string, data url.Values, expect, errCode string) (Identity, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

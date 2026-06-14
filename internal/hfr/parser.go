@@ -1,6 +1,7 @@
 package hfr
 
 import (
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,6 +14,71 @@ var (
 	reMessageCited  = regexp.MustCompile(`Message cité \d+ fois?`)
 	reSignature     = regexp.MustCompile(`(?m)\s*-{15}\n\t\t\t.*$`)
 )
+
+// preserveReplyFormFields extracts the server-rendered form state from the
+// reply page so a POST approximates what a browser would send. It returns every
+// named field of the reply form (the one whose action targets bddpost.php),
+// EXCEPT the message body (content_form) and submit/button controls. Checkboxes
+// and radios are included only when the page rendered them checked — this is how
+// the email-notify subscription is carried: HFR renders the notify checkbox
+// "checked" iff the user is currently subscribed, so preserving it verbatim
+// keeps the subscription untouched (bug #31). The field name is intentionally
+// not hardcoded; whatever HFR names it, a checked checkbox round-trips.
+//
+// Not a full browser emulation: <select> only emits an explicitly selected
+// <option> (no "first option when none selected" fallback, no option-text when
+// value is absent). That is sufficient here — the reply form's selects do not
+// carry subscription state — but is why this is "approximates", not "mirrors".
+func preserveReplyFormFields(doc *goquery.Document) url.Values {
+	out := url.Values{}
+	form := doc.Find(`form[action*="bddpost.php"]`).First()
+	if form.Length() == 0 {
+		// Fall back to any form carrying the content_form textarea.
+		form = doc.Find("form").FilterFunction(func(_ int, s *goquery.Selection) bool {
+			return s.Find("textarea[name=content_form]").Length() > 0
+		}).First()
+	}
+	if form.Length() == 0 {
+		return out
+	}
+	form.Find("input").Each(func(_ int, s *goquery.Selection) {
+		name, ok := s.Attr("name")
+		if !ok || name == "" || name == "content_form" {
+			return
+		}
+		typ, _ := s.Attr("type")
+		switch strings.ToLower(typ) {
+		case "submit", "button", "image", "reset", "file", "password":
+			return
+		case "checkbox", "radio":
+			if _, checked := s.Attr("checked"); !checked {
+				return // unchecked controls are not submitted by a browser
+			}
+			val, has := s.Attr("value")
+			if !has || val == "" {
+				val = "on" // browser default for a valueless checked box
+			}
+			out.Add(name, val)
+			return
+		}
+		val, _ := s.Attr("value")
+		out.Set(name, val)
+	})
+	// select: take the selected <option> value of each named select.
+	form.Find("select[name]").Each(func(_ int, sel *goquery.Selection) {
+		name, _ := sel.Attr("name")
+		if name == "" {
+			return
+		}
+		opt := sel.Find("option[selected]").First()
+		if opt.Length() == 0 {
+			return
+		}
+		val, _ := opt.Attr("value")
+		out.Set(name, val)
+	})
+	return out
+}
 
 // parseEditPage extracts FP detection and subcat/subject from an edit page
 func parseEditPage(doc *goquery.Document) EditInfo {
