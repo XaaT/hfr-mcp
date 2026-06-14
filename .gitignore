@@ -1,3 +1,6 @@
 /hfr-mcp
 /hfr
 hfr.conf
+
+# nested clone of the hfr-mcp-action repo, not part of this repository
+/hfr-mcp-action/
