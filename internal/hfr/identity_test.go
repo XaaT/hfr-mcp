@@ -2,6 +2,48 @@ package hfr
 
 import "testing"
 
+func TestCheckIdentity(t *testing.T) {
+	id := Identity{Pseudo: "xatelitte", UserID: "1214571", Authenticated: true}
+
+	t.Run("no constraint, fail-closed", func(t *testing.T) {
+		c := &Client{}
+		if err := c.checkIdentity(id, ""); err != ErrNoExpectedAccount {
+			t.Fatalf("got %v, want ErrNoExpectedAccount", err)
+		}
+	})
+	t.Run("no constraint, opt-out allows", func(t *testing.T) {
+		c := &Client{allowUnguarded: true}
+		if err := c.checkIdentity(id, ""); err != nil {
+			t.Fatalf("got %v, want nil", err)
+		}
+	})
+	t.Run("server constraint match", func(t *testing.T) {
+		c := &Client{expectedLogin: "xatelitte"}
+		if err := c.checkIdentity(id, ""); err != nil {
+			t.Fatalf("got %v, want nil", err)
+		}
+	})
+	t.Run("server constraint mismatch", func(t *testing.T) {
+		c := &Client{expectedLogin: "XaTriX"}
+		err := c.checkIdentity(id, "")
+		if he, ok := err.(*HfrError); !ok || he.Code != "identity" {
+			t.Fatalf("got %v, want identity error", err)
+		}
+	})
+	t.Run("all constraints must pass: server match + call mismatch", func(t *testing.T) {
+		c := &Client{expectedLogin: "xatelitte"}
+		if err := c.checkIdentity(id, "id:54596"); err == nil {
+			t.Fatal("expected mismatch error")
+		}
+	})
+	t.Run("opt-out does not bypass an active constraint", func(t *testing.T) {
+		c := &Client{allowUnguarded: true, expectedLogin: "XaTriX"}
+		if err := c.checkIdentity(id, ""); err == nil {
+			t.Fatal("expected identity error despite allowUnguarded")
+		}
+	})
+}
+
 func TestIdentityMatches(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -1,6 +1,9 @@
 package hfr
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Identity is the account currently behind the session.
 type Identity struct {
@@ -46,6 +49,37 @@ func parseExpect(want string) (isID bool, value string) {
 		}
 		return false, w
 	}
+}
+
+// checkIdentity enforces the expected-account constraints against id.
+// Fail-closed: with no constraint and no opt-out it refuses.
+// The caller must hold c.mu (it runs inside the guarded write path); it does
+// not lock itself, to stay reentrant-safe under authenticatedPost.
+func (c *Client) checkIdentity(id Identity, expect string) error {
+	var constraints []string
+	if c.expectedLogin != "" {
+		constraints = append(constraints, c.expectedLogin)
+	}
+	if expect != "" {
+		constraints = append(constraints, expect)
+	}
+	if len(constraints) == 0 {
+		if c.allowUnguarded {
+			return nil
+		}
+		return ErrNoExpectedAccount
+	}
+	for _, want := range constraints {
+		ok, err := identityMatches(id, want)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return &HfrError{Code: "identity", Message: fmt.Sprintf(
+				"write refused: connected as %q (userId %s) != expected %q", id.Pseudo, id.UserID, want)}
+		}
+	}
+	return nil
 }
 
 // identityMatches reports whether id satisfies the constraint want.

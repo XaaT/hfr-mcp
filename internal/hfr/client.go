@@ -6,6 +6,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -15,11 +16,19 @@ const baseURL = "https://forum.hardware.fr"
 
 // Client handles all interactions with the HFR forum
 type Client struct {
-	http      *http.Client
-	ua        string
-	pseudo    string
-	hashCheck string
-	authed    bool
+	http           *http.Client
+	ua             string
+	pseudo         string
+	hashCheck      string
+	authed         bool
+	userID         string // resolved numeric HFR user id at login ("" if unknown)
+	expectedLogin  string // server-side expected account (HFR_EXPECT_LOGIN)
+	allowUnguarded bool   // HFR_ALLOW_UNGUARDED_WRITES opt-out
+	baseURL        string // injectable; defaults to defaultBaseURL (set in a later task)
+	// mu serializes login and the guarded write path (Login / authenticatedPost).
+	// checkIdentity is called by the holder of mu and must NOT lock it itself.
+	// Setters below are init-only (called before the server starts handling calls).
+	mu sync.Mutex
 }
 
 // NewClient creates a new HFR client with a cookie jar and timeout
@@ -33,6 +42,12 @@ func NewClient() *Client {
 		ua: "hfr-mcp/" + Version,
 	}
 }
+
+// SetExpectedLogin sets the server-side expected account guard.
+func (c *Client) SetExpectedLogin(login string) { c.expectedLogin = login }
+
+// SetAllowUnguarded enables writes when no expected account is configured.
+func (c *Client) SetAllowUnguarded(b bool) { c.allowUnguarded = b }
 
 // Login authenticates with the forum
 func (c *Client) Login(pseudo, password string) error {
@@ -183,13 +198,13 @@ func checkResponseErrors(doc *goquery.Document) error {
 	body := doc.Text()
 
 	errors := map[string]*HfrError{
-		"Vous n'avez pas les droits pour":                          ErrNoRights,
-		"Afin de prevenir les tentatives de flood":                 ErrFloodLimit,
-		"Afin de prévenir les tentatives de flood":                 ErrFloodLimit,
-		"Ce sujet est fermé":                                       ErrTopicLocked,
-		"Vous devez être identifié":                                ErrSessionExpired,
-		"Vous devez remplir tous les champs avant de poster":       {Code: "post", Message: "content or subject missing"},
-		"Vous devez entrez un destinataire":                        {Code: "post", Message: "recipient missing"},
+		"Vous n'avez pas les droits pour":                    ErrNoRights,
+		"Afin de prevenir les tentatives de flood":           ErrFloodLimit,
+		"Afin de prévenir les tentatives de flood":           ErrFloodLimit,
+		"Ce sujet est fermé":                                 ErrTopicLocked,
+		"Vous devez être identifié":                          ErrSessionExpired,
+		"Vous devez remplir tous les champs avant de poster": {Code: "post", Message: "content or subject missing"},
+		"Vous devez entrez un destinataire":                  {Code: "post", Message: "recipient missing"},
 	}
 
 	for msg, hfrErr := range errors {
