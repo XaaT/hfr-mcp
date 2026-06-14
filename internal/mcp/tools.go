@@ -169,17 +169,14 @@ func handleRead(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReadInpu
 
 func handleReply(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReplyInput, Result] {
 	return func(ctx context.Context, req *mcp.CallToolRequest, input ReplyInput) (*mcp.CallToolResult, Result, error) {
+		// Validate notify before logging in or posting: an invalid value must
+		// fail fast rather than silently keep the current subscription.
+		notify, err := hfr.ParseNotifyMode(input.Notify)
+		if err != nil {
+			return nil, Result{}, err
+		}
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
-		}
-		var notify hfr.NotifyMode
-		switch input.Notify {
-		case "on":
-			notify = hfr.NotifySubscribe
-		case "off":
-			notify = hfr.NotifyUnsubscribe
-		default:
-			notify = hfr.NotifyKeep
 		}
 		res, err := client.Reply(input.Cat, input.Post, input.Content, input.Expect, notify)
 		if err != nil {

@@ -1,5 +1,7 @@
 package hfr
 
+import "fmt"
+
 // NotifyMode controls the email-notification subscription for a topic when
 // posting a reply. The default (NotifyKeep) preserves the current server-side
 // state by round-tripping the value from the reply form.
@@ -14,6 +16,23 @@ const (
 	// NotifyUnsubscribe forces email notifications off (emaill=0).
 	NotifyUnsubscribe
 )
+
+// ParseNotifyMode maps a user-facing value to a NotifyMode. Empty means keep.
+// It rejects any other value so an invalid input fails fast before a write,
+// rather than silently falling back to keep (a typo like "OFF" would otherwise
+// leave the subscription unchanged while the caller believed it changed).
+func ParseNotifyMode(s string) (NotifyMode, error) {
+	switch s {
+	case "":
+		return NotifyKeep, nil
+	case "on":
+		return NotifySubscribe, nil
+	case "off":
+		return NotifyUnsubscribe, nil
+	default:
+		return NotifyKeep, fmt.Errorf("invalid notify value %q (expected \"on\", \"off\", or empty)", s)
+	}
+}
 
 // ReplyResult holds the outcome of a successful Reply call.
 type ReplyResult struct {

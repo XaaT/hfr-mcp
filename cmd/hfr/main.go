@@ -295,19 +295,19 @@ func cmdReply(client *hfr.Client, args []string, expect string) {
 	notify := hfr.NotifyKeep
 	filtered := args[:0:len(args)]
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--notify" && i+1 < len(args) {
-			switch args[i+1] {
-			case "on":
-				notify = hfr.NotifySubscribe
-			case "off":
-				notify = hfr.NotifyUnsubscribe
-			default:
-				die("--notify must be 'on' or 'off', got %q", args[i+1])
+		if args[i] == "--notify" {
+			if i+1 >= len(args) {
+				die("--notify requires a value: on or off")
 			}
+			m, err := hfr.ParseNotifyMode(args[i+1])
+			if err != nil {
+				die("%v", err)
+			}
+			notify = m
 			i++ // skip value
-		} else {
-			filtered = append(filtered, args[i])
+			continue
 		}
+		filtered = append(filtered, args[i])
 	}
 	args = filtered
 

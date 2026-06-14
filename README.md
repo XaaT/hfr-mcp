@@ -109,6 +109,10 @@ hfr --auth read 13 120036 350
 # Poster une reponse (auth automatique)
 hfr reply 13 120036 "Hello HFR :o"
 
+# Poster en (dés)activant la notification e-mail du sujet (vide = conserver)
+hfr reply 13 120036 "Hello" --notify on
+hfr reply 13 120036 "Hello" --notify off
+
 # Citer (retourne le BBCode [quotemsg=...])
 hfr quote 13 120036 74497677
 
@@ -137,7 +141,7 @@ Les commandes d'ecriture (`new`, `reply`, `edit`, `mp`) et `quote`/`whoami` exig
 | `hfr_read` | Lire un topic. `page=0` pour la derniere page, `page_from`/`page_to` pour du batch concurrent, `print=true` pour le mode impression, `last=N` pour les N derniers posts |
 | `hfr_topics` | Lister les topics d'une categorie/sous-categorie avec pagination |
 | `hfr_cats` | Lister les categories (et les sous-categories d'une categorie) |
-| `hfr_reply` | Poster une reponse (BBCode). Param `expect` pour le garde-fou d'identite |
+| `hfr_reply` | Poster une reponse (BBCode). Param `expect` (garde-fou d'identite) ; param `notify` (`on`/`off`/vide) pour (dés)activer la notification e-mail du sujet, vide = conserver l'etat actuel |
 | `hfr_create_topic` | Creer un topic. Param `expect` pour le garde-fou d'identite |
 | `hfr_edit` | Editer un post existant (detecte le first post, preserve le sujet). Param `expect` |
 | `hfr_quote` | Citer un ou plusieurs messages (`numreponse` ou `numreponses[]`) |

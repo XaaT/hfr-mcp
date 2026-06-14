@@ -256,3 +256,28 @@ func TestReplyNotifyUnsubscribe(t *testing.T) {
 		t.Fatalf("NotifyUnsubscribe: Subscribed=%v, want false", res.Subscribed)
 	}
 }
+
+func TestParseNotifyMode(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    NotifyMode
+		wantErr bool
+	}{
+		{"", NotifyKeep, false},
+		{"on", NotifySubscribe, false},
+		{"off", NotifyUnsubscribe, false},
+		{"OFF", NotifyKeep, true},
+		{"true", NotifyKeep, true},
+		{"1", NotifyKeep, true},
+		{"keep", NotifyKeep, true},
+	}
+	for _, tc := range cases {
+		got, err := ParseNotifyMode(tc.in)
+		if (err != nil) != tc.wantErr {
+			t.Fatalf("ParseNotifyMode(%q) err=%v, wantErr=%v", tc.in, err, tc.wantErr)
+		}
+		if !tc.wantErr && got != tc.want {
+			t.Fatalf("ParseNotifyMode(%q) = %v, want %v", tc.in, got, tc.want)
+		}
+	}
+}
