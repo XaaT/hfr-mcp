@@ -1,11 +1,7 @@
 package hfr
 
 // SendMP sends a private message
-func (c *Client) SendMP(dest, subject, content string) error {
-	if err := c.ensureAuth(); err != nil {
-		return err
-	}
-
+func (c *Client) SendMP(dest, subject, content, expect string) (Identity, error) {
 	data := c.baseFormData("prive", content)
 	data.Set("dest", dest)
 	data.Set("sujet", subject)
@@ -18,11 +14,5 @@ func (c *Client) SendMP(dest, subject, content string) error {
 	data.Set("cache", "")
 	data.Set("search_smilies", "")
 	data.Set("ColorUsedMem", "")
-
-	doc, err := c.doPost("/bddpost.php?config=hfr.inc", data)
-	if err != nil {
-		return err
-	}
-
-	return checkPostSuccess(doc, "mp")
+	return c.authenticatedPost("/bddpost.php?config=hfr.inc", data, expect, "mp")
 }

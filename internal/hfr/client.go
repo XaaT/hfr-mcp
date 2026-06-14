@@ -170,7 +170,9 @@ func (c *Client) ensureAuth() error {
 	return nil
 }
 
-// baseFormData returns the common form fields for posting
+// baseFormData returns the common form fields for posting.
+// It reads c.pseudo/c.hashCheck without holding c.mu; this is safe because
+// they are written once at login, before any write call (lazy-login model).
 func (c *Client) baseFormData(cat string, content string) url.Values {
 	return url.Values{
 		"hash_check":   {c.hashCheck},
@@ -237,6 +239,30 @@ func (c *Client) doGet(fullURL string) (*goquery.Document, error) {
 	}
 
 	return doc, nil
+}
+
+// authenticatedPost resolves the current identity, enforces the guard, and
+// only then POSTs. Returns the identity used. The identity check and the POST
+// are atomic; any pre-fetch GET (e.g. Edit's edit-page load) is intentionally
+// outside this lock — the guard still re-checks immediately before the POST.
+func (c *Client) authenticatedPost(endpoint string, data url.Values, expect, errCode string) (Identity, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	id, err := c.currentIdentity()
+	if err != nil {
+		return Identity{}, err
+	}
+	if err := c.checkIdentity(id, expect); err != nil {
+		return Identity{}, err
+	}
+	doc, err := c.doPost(endpoint, data)
+	if err != nil {
+		return Identity{}, err
+	}
+	if err := checkPostSuccess(doc, errCode); err != nil {
+		return Identity{}, err
+	}
+	return id, nil
 }
 
 // checkPostSuccess validates that a POST was successful by checking for errors then the success marker
