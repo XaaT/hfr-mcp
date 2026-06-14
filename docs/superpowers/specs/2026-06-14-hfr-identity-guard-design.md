@@ -2,7 +2,7 @@
 
 **Date** : 2026-06-14
 **Issue** : [#32](https://github.com/ForumHFR/hfr-mcp/issues/32) — écritures sous le mauvais compte HFR
-**Statut** : design validé, prêt pour le plan d'implémentation
+**Statut** : design validé (intègre la review Codex gpt-5.5/xhigh du 2026-06-14), prêt pour le plan d'implémentation
 
 ## Problème
 
@@ -17,8 +17,9 @@ La prévention est donc la seule protection viable.
 ## Objectifs
 
 1. **Savoir** quel compte est actif avant d'écrire (`hfr_whoami` / `hfr whoami`).
-2. **Refuser** d'écrire quand le compte connecté ne correspond pas au compte voulu — déclaré soit côté serveur,
-   soit par commande (défense en profondeur).
+2. **Refuser** d'écrire quand le compte connecté ne correspond pas au compte voulu — déclaré côté serveur
+   (`HFR_EXPECT_LOGIN`) et/ou par appel (`--pseudo` / `expect`), et **refuser par défaut** si aucun compte
+   attendu n'est déclaré (fail-closed).
 3. **Tracer** systématiquement, dans le retour de chaque écriture réussie, le compte effectivement utilisé.
 
 Hors scope : les bugs de l'issue #31 (notif e-mail, cache `hfr_read`), un éventuel `hfr_delete`,
@@ -28,107 +29,151 @@ la sélection/bascule de compte au runtime.
 
 | Décision | Choix retenu |
 |---|---|
-| Déclaration du compte attendu | **Défense en profondeur** : barrière serveur `HFR_EXPECT_LOGIN` (env/`hfr.conf`) **et** paramètre par appel (`--pseudo` CLI / `expect` MCP). |
-| Critère de comparaison | **Pseudo + userId** : une contrainte matche si elle égale le pseudo (insensible à la casse) **ou** le userId numérique. |
-| Comportement par défaut (aucun compte attendu) | **Fail-open** : l'écriture passe, mais le retour affiche toujours le compte utilisé. Le garde-fou strict ne s'active que lorsqu'un compte attendu est déclaré. |
-| Emplacement de la garde | Dans le **`Client` HFR** (`internal/hfr`), point de passage unique pour la CLI et le MCP. |
+| Déclaration du compte attendu | **Défense en profondeur** : barrière serveur `HFR_EXPECT_LOGIN` **et** paramètre par appel (`--pseudo` CLI / `expect` MCP). Les deux contraintes, quand présentes, doivent passer. |
+| Critère de comparaison | **Pseudo + userId**, avec **syntaxe typée** : `pseudo:<nom>`, `id:<n>`. Sans préfixe : un attendu purement numérique vise le userId, sinon le pseudo. `"0"` est une contrainte valide (≠ vide). |
+| Comportement par défaut (aucun compte attendu) | **Fail-closed** : les écritures sont refusées tant qu'aucun compte attendu n'est déclaré, sauf opt-out explicite `HFR_ALLOW_UNGUARDED_WRITES=1` (qui autorise l'écriture en affichant le compte). |
+| Autorité d'identité | Le **cookie `md_user` du jar au moment du POST** (pas une valeur mise en cache au login). |
+| Emplacement de la garde | Dans le **`Client` HFR** (`internal/hfr`), via un chemin d'écriture unique. |
 
 ## Architecture
 
-La logique vit dans le `Client` HFR. La CLI et le serveur MCP ne font que :
-- fournir le compte attendu issu de l'appel (`--pseudo` / champ `expect`) ;
-- fournir le compte attendu serveur (`HFR_EXPECT_LOGIN`) au moment de la construction du client ;
-- formater l'identité renvoyée par le client.
+La logique vit dans le `Client` HFR, derrière un **chemin d'écriture unique** qui rend atomiques
+« résolution de l'identité courante → vérification → POST ». La CLI et le serveur MCP ne font que fournir
+les contraintes (`--pseudo` / `expect`, `HFR_EXPECT_LOGIN`) et formater l'`Identity` renvoyée.
 
-Aucune vérification n'est dupliquée dans les couches d'appel.
+### Autorité d'identité (corrige review #1, #2)
+
+Le compte qui signe réellement un POST est porté par le `CookieJar`, pas par un champ mémorisé. La garde lit
+donc l'identité **courante** juste avant chaque POST :
+
+- `func (c *Client) currentIdentity() (Identity, error)` : lit le cookie `md_user` du jar (pseudo = autorité),
+  associe le `userID` résolu. Erreur si le cookie est absent (session perdue).
+- Pour `Edit`, qui exécute un GET (page d'édition) **avant** le POST, la vérification est refaite
+  immédiatement avant le POST — pas seulement en tête de fonction.
+- Tous les POST d'écriture passent par un helper interne unique (`authenticatedPost`) qui enchaîne
+  `currentIdentity` → `checkIdentity` → `doPost` sous le même verrou.
 
 ## Composants
 
 ### 1. `internal/hfr` — résolution d'identité
 
-- `Client` gagne deux champs : `userID string` et `expectedLogin string`.
+- `Client` gagne `userID string`, `expectedLogin string`, `allowUnguarded bool`, `baseURL string`
+  (injectable pour les tests, défaut = const actuelle — corrige review #9), et un `sync.Mutex`
+  protégeant l'état auth et les écritures (corrige review #8).
 - `type Identity struct { Pseudo string; UserID string; Authenticated bool }`.
-- Au login (dans/après `fetchHashCheck`, qui charge déjà `/user/editprofil.php`), résoudre le userId réel.
-  Source par ordre de préférence : cookie `md_user_id` s'il existe, sinon parse de la page profil
-  (lien/champ exposant l'identifiant). **Si le userId ne peut pas être résolu, `userID` reste vide** et la
-  garde se rabat sur le pseudo seul — pas d'échec dur.
-- `func (c *Client) Whoami() Identity` — renvoie l'identité en cache (zéro requête supplémentaire ;
-  l'appelant déclenche le login lazy au préalable).
+- **Résolution du `userId`** (corrige review #3) : à l'authentification, parser une **source serveur précise
+  sur `/user/editprofil.php`** (déjà chargée par `fetchHashCheck`) — champ/lien exposant l'identifiant ;
+  source exacte à figer à l'implémentation. Si le cookie `md_user_id` existe, le valider contre cette source.
+  **Pas de userId inventé** : s'il reste irrésolu, `userID` est vide.
+- `func (c *Client) Whoami() (Identity, error)` — renvoie l'identité courante (déclenche le login lazy
+  côté appelant au préalable).
 
 ### 2. `internal/hfr` — garde-fou
 
 ```go
-func (c *Client) checkIdentity(expect string) error {
-    for _, want := range []string{c.expectedLogin, expect} {
-        if want == "" {
-            continue // fail-open : contrainte absente
+// want est une contrainte typée : "pseudo:x", "id:n", ou brut (numérique => userId, sinon pseudo).
+func (c *Client) checkIdentity(id Identity, expect string) error {
+    constraints := nonEmpty(c.expectedLogin, expect)
+    if len(constraints) == 0 {
+        if c.allowUnguarded {
+            return nil // opt-out explicite
         }
-        if !c.identityMatches(want) {
-            return &HfrError{Code: "identity", Message: ...}
+        return ErrNoExpectedAccount // fail-closed
+    }
+    for _, want := range constraints {
+        if !identityMatches(id, want) {
+            return ErrIdentityMismatch // message: connecté X (userId N) ≠ attendu want
         }
     }
     return nil
 }
-
-func (c *Client) identityMatches(want string) bool {
-    return strings.EqualFold(want, c.pseudo) || (c.userID != "" && want == c.userID)
-}
 ```
 
-- Appelé en tête de `Reply`, `Edit`, `CreateTopic`, `SendMP`, **après** `ensureAuth`/login et **avant** tout POST.
-- `expectedLogin` (serveur) et `expect` (appel) sont deux contraintes indépendantes : les deux doivent passer.
+- `identityMatches` applique la syntaxe typée et **échoue explicitement si l'attendu vise un userId mais que
+  `id.UserID` est vide** (corrige review #3, #6).
+- Comparaison de pseudo via une fonction `normalize` unique : trim, repli de casse, normalisation Unicode,
+  décodage cookie si nécessaire (corrige review #7).
+- `""` = pas de contrainte ; `"0"` = contrainte réelle (corrige review #6).
 
-### 3. `internal/config` — compte attendu serveur
+### 3. `internal/hfr` — robustesse du login (corrige review #4)
 
-- Lire `HFR_EXPECT_LOGIN` (env) et `expect_login=` dans `hfr.conf`. Optionnel. L'env prime sur le fichier.
-- Transmis au `Client` à la construction.
+`Login` ne doit muter `pseudo`/`authed`/`hashCheck`/`userID` **qu'après succès complet** (cookie `md_user`
+confirmé **et** `fetchHashCheck` réussi **et** `userID` résolu). En cas d'échec intermédiaire : rollback,
+`authed` reste `false`.
 
-### 4. `internal/mcp` — exposition
+### 4. `internal/config` — compte attendu serveur
 
-- Nouvel outil **`hfr_whoami`** (sans paramètre) : déclenche le login lazy, renvoie pseudo + userId +
-  compte attendu serveur.
-- Champ optionnel `expect string` ajouté à `ReplyInput`, `EditInput`, `CreateTopicInput`, `MPInput`,
-  transmis à la méthode du client.
-- Le serveur passe `HFR_EXPECT_LOGIN` au client au démarrage.
-- Les handlers d'écriture, en cas de succès, formatent le compte effectif via `client.Whoami()`.
+- Lire `HFR_EXPECT_LOGIN` (env) + `expect_login=` (`hfr.conf`) ; `HFR_ALLOW_UNGUARDED_WRITES` (env).
+  L'env prime sur le fichier. Transmis au `Client` à la construction (signature `NewClient` étendue
+  ou option fonctionnelle — corrige review #10).
 
-### 5. `cmd/hfr` — CLI
+### 5. `internal/mcp` — exposition
 
-- Flag global **`--pseudo <login>`** : sur les commandes d'écriture, transmis comme `expect`.
-- Nouvelle sous-commande **`hfr whoami`** : login puis affichage pseudo + userId + compte attendu.
-- Lit aussi `HFR_EXPECT_LOGIN` via la config.
+- Nouvel outil **`hfr_whoami`** (sans paramètre) : login lazy, renvoie pseudo + userId + compte attendu
+  + état du garde (gardé / non gardé).
+- Champ optionnel `expect string` ajouté à `ReplyInput`, `EditInput`, `CreateTopicInput`, `MPInput`.
+- Le serveur injecte `HFR_EXPECT_LOGIN` / `HFR_ALLOW_UNGUARDED_WRITES` au client au démarrage.
+- Les handlers formatent l'`Identity` **retournée par la méthode d'écriture** (pas un `Whoami()` post-hoc —
+  corrige review #10).
+
+### 6. `cmd/hfr` — CLI
+
+- Flag global **`--pseudo <login>`** (parsé à côté de `--auth`, aujourd'hui seul géré — corrige review #10) ;
+  transmis comme `expect` sur les écritures.
+- Nouvelle sous-commande **`hfr whoami`**.
+- Lit `HFR_EXPECT_LOGIN` / `HFR_ALLOW_UNGUARDED_WRITES` via la config.
+
+## Signatures (corrige review #10)
+
+```go
+func (c *Client) Reply(cat, postId int, content, expect string) (Identity, error)
+func (c *Client) Edit(cat, postId, numreponse int, content, expect string) (Identity, error)
+func (c *Client) CreateTopic(cat, subcat int, subject, content, expect string) (Identity, error)
+func (c *Client) SendMP(dest, subject, content, expect string) (Identity, error)
+func (c *Client) Whoami() (Identity, error)
+```
 
 ## Comportement (flux)
 
 **Écriture** (`reply`/`edit`/`mp`/`new`) :
-1. login lazy → résolution de l'identité (pseudo + userId) ;
-2. `checkIdentity(expect)` contre `HFR_EXPECT_LOGIN` et le paramètre d'appel ;
-3. si une contrainte échoue → erreur `identity`, **aucun POST** ;
-4. sinon POST, puis retour incluant le compte effectif.
+1. login lazy → résolution de l'identité courante depuis le jar (`currentIdentity`) ;
+2. `checkIdentity` contre `HFR_EXPECT_LOGIN` et l'`expect` d'appel, sous verrou ;
+   - aucune contrainte et pas d'opt-out → `ErrNoExpectedAccount`, **aucun POST** ;
+   - mismatch → `ErrIdentityMismatch`, **aucun POST** ;
+3. (Edit) re-vérification immédiatement avant le POST d'édition ;
+4. POST, puis retour de l'`Identity` utilisée.
 
-**`whoami`** : login → renvoie l'identité. Lecture seule, ne poste rien.
+**`whoami`** : login → renvoie l'identité. Lecture seule.
 
 ## Formats de message
 
-- Succès d'écriture : `Message posté sous xatelitte (userId 1214571).`
-- Refus : `écriture refusée : compte connecté "XaTriX" (54596) ≠ attendu "xatelitte".`
-- `whoami` : `Connecté : xatelitte (userId 1214571). Compte attendu : xatelitte.`
-  (ou `Compte attendu : (non défini)` si aucun).
+- Succès : `Message posté sous xatelitte (userId 1214571).`
+- Refus mismatch : `écriture refusée : compte connecté "XaTriX" (54596) ≠ attendu "xatelitte".`
+- Refus non gardé : `écriture refusée : aucun compte attendu déclaré (pose HFR_EXPECT_LOGIN / --pseudo, ou HFR_ALLOW_UNGUARDED_WRITES=1).`
+- `whoami` : `Connecté : xatelitte (userId 1214571). Compte attendu : xatelitte. Garde : active.`
 
-## Tests
+## Erreurs
 
-Le dépôt n'a pas encore de tests. Ajout de `internal/hfr/identity_test.go` avec un serveur HTTP mock
-(`httptest`) pour le login et la page profil :
+- `ErrNoExpectedAccount` (code `identity`) — fail-closed, aucun compte attendu.
+- `ErrIdentityMismatch` (code `identity`) — compte connecté ≠ attendu, message explicite.
 
-- résolution du userId au login (cookie présent / page parsée / non résolvable → userId vide) ;
-- `identityMatches` : match par pseudo (casse mixte), match par userId, non-match ;
-- `checkIdentity` : contrainte serveur seule, contrainte appel seule, les deux, aucune (fail-open),
-  mismatch sur l'une ou l'autre ;
-- garde appelée avant POST : un mismatch n'émet aucune requête de POST.
+## Tests (corrige review #9)
+
+`internal/hfr` rendu testable via `baseURL`/`http.Client` injectables + serveur `httptest`. Ajout de
+`identity_test.go` :
+
+- résolution du userId au login (source présente / cookie incohérent / irrésolvable → userId vide) ;
+- `Login` : rollback si `fetchHashCheck` échoue (pas d'état `authed` partiel) ;
+- `identityMatches` : `pseudo:` (casse mixte, accents, espaces), `id:`, brut numérique → userId,
+  pseudo numérique, attendu userId mais userID vide → échec, `"0"` ≠ `""` ;
+- `checkIdentity` : contrainte serveur seule, appel seule, les deux, aucune (fail-closed),
+  opt-out `HFR_ALLOW_UNGUARDED_WRITES` ;
+- garde avant POST : un mismatch (et le cas non gardé) **n'émet aucune requête de POST** ;
+- TOCTOU `Edit` : dérive du cookie `md_user` entre le GET et le POST → refus.
 
 ## Impact / compatibilité
 
-- Rétrocompatible : sans `HFR_EXPECT_LOGIN` ni `--pseudo`, le comportement d'écriture est inchangé,
-  enrichi du compte affiché dans le retour.
-- Pas de bump de version requis par ce design seul ; à grouper avec le prochain bump (nouveaux outils →
-  candidat v1.2.0). Mettre à jour `CHANGELOG.md`, le README (tableaux d'outils + section auth) et l'AGENTS.md.
+- **Changement de comportement** : par défaut, les écritures exigent désormais un compte attendu déclaré
+  (fail-closed). Opt-out `HFR_ALLOW_UNGUARDED_WRITES=1` pour le comportement historique.
+- Nouveaux outils/flags → candidat **v1.2.0**. Mettre à jour `CHANGELOG.md`, le README (tableaux d'outils
+  + section auth + nouvelles variables d'env) et l'`AGENTS.md`.
