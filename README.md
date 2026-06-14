@@ -24,8 +24,8 @@ Le contenu utilise le BBCode HFR (`[b]`, `[url=]`, `[quotemsg=...]`, smileys `:o
 
 ```bash
 # Installation
-go install github.com/XaaT/hfr-mcp/cmd/hfr-mcp@latest   # serveur MCP
-go install github.com/XaaT/hfr-mcp/cmd/hfr@latest        # CLI
+go install github.com/ForumHFR/hfr-mcp/cmd/hfr-mcp@latest   # serveur MCP
+go install github.com/ForumHFR/hfr-mcp/cmd/hfr@latest        # CLI
 
 # Ou depuis les sources
 go build -o hfr-mcp ./cmd/hfr-mcp/
@@ -178,40 +178,40 @@ Serveur MCP et CLI fonctionnels : lecture, reponse, edition, citation, MP. Mode 
 
 Explorer le forum et optimiser la sortie pour les grosses lectures.
 
-- [#13](https://github.com/XaaT/hfr-mcp/issues/13) Liste des topics d'une categorie
-- [#23](https://github.com/XaaT/hfr-mcp/issues/23) Liste des categories et sous-categories
-- [#22](https://github.com/XaaT/hfr-mcp/issues/22) Sortie fichier (sauvegarder dans un fichier au lieu du contexte)
+- [#13](https://github.com/ForumHFR/hfr-mcp/issues/13) Liste des topics d'une categorie
+- [#23](https://github.com/ForumHFR/hfr-mcp/issues/23) Liste des categories et sous-categories
+- [#22](https://github.com/ForumHFR/hfr-mcp/issues/22) Sortie fichier (sauvegarder dans un fichier au lieu du contexte)
 
 ### v1.2.0 — Gestion de contenu
 
 Edition intelligente, creation de topics, conversion Markdown/BBCode, gestion de First Posts.
 
-- [#25](https://github.com/XaaT/hfr-mcp/issues/25) `hfr_get_bbcode`, `hfr_create_topic`, `hfr_convert`, `hfr_preview`
-- [#16](https://github.com/XaaT/hfr-mcp/issues/16) BBCode avance et formatage de sortie
+- [#25](https://github.com/ForumHFR/hfr-mcp/issues/25) `hfr_get_bbcode`, `hfr_create_topic`, `hfr_convert`, `hfr_preview`
+- [#16](https://github.com/ForumHFR/hfr-mcp/issues/16) BBCode avance et formatage de sortie
 
 ### v1.3.0 — Decouverte et communication
 
 Recherche, drapeaux et MPs complets.
 
-- [#14](https://github.com/XaaT/hfr-mcp/issues/14) Drapeaux (lire/poser/retirer les topics suivis)
-- [#7](https://github.com/XaaT/hfr-mcp/issues/7) Recherche via `/search.php`
-- [#15](https://github.com/XaaT/hfr-mcp/issues/15) MPs : lire la boite de reception, repondre dans les fils
+- [#14](https://github.com/ForumHFR/hfr-mcp/issues/14) Drapeaux (lire/poser/retirer les topics suivis)
+- [#7](https://github.com/ForumHFR/hfr-mcp/issues/7) Recherche via `/search.php`
+- [#15](https://github.com/ForumHFR/hfr-mcp/issues/15) MPs : lire la boite de reception, repondre dans les fils
 
 ### v1.4.0 — Culture et intelligence
 
 Connaissance du forum et skills d'automatisation.
 
-- [#5](https://github.com/XaaT/hfr-mcp/issues/5) Integration des smileys
-- [#6](https://github.com/XaaT/hfr-mcp/issues/6) Culture et slang HFR
-- [#18](https://github.com/XaaT/hfr-mcp/issues/18) Skill Claude Code de resume de topic
-- [#10](https://github.com/XaaT/hfr-mcp/issues/10) Documentation complete du protocole HFR
+- [#5](https://github.com/ForumHFR/hfr-mcp/issues/5) Integration des smileys
+- [#6](https://github.com/ForumHFR/hfr-mcp/issues/6) Culture et slang HFR
+- [#18](https://github.com/ForumHFR/hfr-mcp/issues/18) Skill Claude Code de resume de topic
+- [#10](https://github.com/ForumHFR/hfr-mcp/issues/10) Documentation complete du protocole HFR
 
 ### v2.0.0 — MCP distant
 
 Accessible depuis Claude.ai web, Claude Code Web et tout client MCP distant.
 
-- [#24](https://github.com/XaaT/hfr-mcp/issues/24) Transport HTTP Streamable, GitHub OAuth, multi-utilisateurs, deploiement Fly.io
-- [#24](https://github.com/XaaT/hfr-mcp/issues/24) Sync bidirectionnelle repos GitHub (Markdown dans le repo, BBCode sur HFR)
+- [#24](https://github.com/ForumHFR/hfr-mcp/issues/24) Transport HTTP Streamable, GitHub OAuth, multi-utilisateurs, deploiement Fly.io
+- [#24](https://github.com/ForumHFR/hfr-mcp/issues/24) Sync bidirectionnelle repos GitHub (Markdown dans le repo, BBCode sur HFR)
 
 ## Architecture
 

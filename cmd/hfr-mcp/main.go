@@ -7,9 +7,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/XaaT/hfr-mcp/internal/config"
-	"github.com/XaaT/hfr-mcp/internal/hfr"
-	hfrmcp "github.com/XaaT/hfr-mcp/internal/mcp"
+	"github.com/ForumHFR/hfr-mcp/internal/config"
+	"github.com/ForumHFR/hfr-mcp/internal/hfr"
+	hfrmcp "github.com/ForumHFR/hfr-mcp/internal/mcp"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

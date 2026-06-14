@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/XaaT/hfr-mcp/internal/hfr"
+	"github.com/ForumHFR/hfr-mcp/internal/hfr"
 )
 
 // formatTopic converts a Topic to a readable text output

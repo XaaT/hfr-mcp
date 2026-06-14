@@ -1,4 +1,4 @@
-module github.com/XaaT/hfr-mcp
+module github.com/ForumHFR/hfr-mcp
 
 go 1.25.8
 

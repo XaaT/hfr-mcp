@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/XaaT/hfr-mcp/internal/hfr"
+	"github.com/ForumHFR/hfr-mcp/internal/hfr"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 

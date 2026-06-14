@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/XaaT/hfr-mcp/internal/config"
-	"github.com/XaaT/hfr-mcp/internal/hfr"
+	"github.com/ForumHFR/hfr-mcp/internal/config"
+	"github.com/ForumHFR/hfr-mcp/internal/hfr"
 )
 
 const usage = `Usage: hfr [--auth] <command> [args...]
