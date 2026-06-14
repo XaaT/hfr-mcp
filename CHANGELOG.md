@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0] - 2026-06-14
+
+### Features
+- Identity guard (#32): writes (`hfr_reply`, `hfr_edit`, `hfr_create_topic`, `hfr_mp` / `reply`, `edit`, `new`, `mp`) are refused when the logged-in account doesn't match the expected one. Fail-closed by default.
+- Expected account declared via `HFR_EXPECT_LOGIN` (env) / `expect_login=` (config) server-side, and per-call via the `expect` MCP parameter or the `--pseudo` CLI flag. Typed syntax: `pseudo:<name>`, `id:<n>`, bare numeric → userId.
+- `HFR_ALLOW_UNGUARDED_WRITES=1` opt-out for the historical (unguarded) behaviour.
+- New `hfr_whoami` MCP tool / `hfr whoami` CLI command: report the active account (pseudo + userId) and the expected account.
+- Write results now report the account effectively used.
+
+### Fixes
+- Login hardening: client state is mutated only on full success — a failed `hash_check`/profile fetch no longer leaves a half-authenticated client.
+
 ## [1.1.0] - 2026-04-11
 
 ### Features

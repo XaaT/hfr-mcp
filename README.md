@@ -11,11 +11,14 @@ Lire des topics, poster des reponses, editer des messages, citer, envoyer des MP
 | Lire un topic | `hfr_read` | `hfr read <cat> <post> [page]` |
 | Lire en mode print | `hfr_read` (print=true) | `hfr print <cat> <post> [page]` |
 | Lister les topics d'une categorie | `hfr_topics` | `hfr topics <cat> [subcat]` |
+| Lister les categories | `hfr_cats` | `hfr cats [cat]` |
 | Poster une reponse | `hfr_reply` | `hfr reply <cat> <post> <content>` |
+| Creer un topic | `hfr_create_topic` | `hfr new <cat> <subcat> <subject> <content>` |
 | Editer un post | `hfr_edit` | `hfr edit <cat> <post> <numreponse> <content>` |
 | Citer un message | `hfr_quote` | `hfr quote <cat> <post> <numreponse>` |
 | Multiquote | `hfr_quote` (numreponses) | `hfr quote <cat> <post> <n1> <n2> ...` |
 | Envoyer un MP | `hfr_mp` | `hfr mp <dest> <subject> <content>` |
+| Compte actif | `hfr_whoami` | `hfr whoami` |
 | Version | — | `hfr version` / `hfr-mcp --version` |
 
 Le contenu utilise le BBCode HFR (`[b]`, `[url=]`, `[quotemsg=...]`, smileys `:o`, `[:pseudo]`, etc.).
@@ -66,6 +69,17 @@ passwd=motdepasse
 
 Les variables d'environnement `HFR_LOGIN` / `HFR_PASSWD` prennent le dessus sur le fichier. Les permissions du fichier sont verifiees au demarrage : un warning s'affiche s'il est lisible par d'autres utilisateurs.
 
+### Garde-fou d'identite
+
+Pour eviter de poster sous le mauvais compte, les ecritures (`hfr_reply`, `hfr_edit`, `hfr_create_topic`, `hfr_mp`) sont **refusees par defaut** tant qu'aucun compte attendu n'est declare. On declare le compte attendu :
+
+- cote serveur : `HFR_EXPECT_LOGIN` (env) ou `expect_login=` (fichier de config) ;
+- par appel : parametre `expect` (MCP) ou flag `--pseudo <login>` (CLI).
+
+La comparaison se fait sur le pseudo (insensible a la casse) **ou** le userId. Syntaxe typee : `pseudo:<nom>`, `id:<n>` ; un nombre nu vise le userId. Si la session connectee ne correspond pas, l'ecriture est refusee **avant** tout envoi.
+
+Pour retrouver le comportement historique (sans garde-fou), exporter `HFR_ALLOW_UNGUARDED_WRITES=1`. `hfr_whoami` / `hfr whoami` affiche le compte actif et le compte attendu.
+
 ## Utilisation CLI
 
 ```bash
@@ -106,9 +120,15 @@ hfr edit 13 120036 74497677 "contenu modifie"
 
 # Envoyer un MP
 hfr mp pseudo "Sujet" "Corps du message"
+
+# Verifier le compte actif
+hfr whoami
+
+# Ecrire en exigeant un compte precis (refus si la session differe)
+hfr --pseudo xatelitte reply 13 120036 "Hello"
 ```
 
-Les commandes d'ecriture (reply, edit, quote, mp) exigent l'authentification (automatique). `read`, `print` et `topics` fonctionnent en anonyme par defaut, `--auth` pour se connecter.
+Les commandes d'ecriture (`new`, `reply`, `edit`, `mp`) et `quote`/`whoami` exigent l'authentification (automatique). `read`, `print`, `topics` et `cats` fonctionnent en anonyme par defaut, `--auth` pour se connecter. Les ecritures appliquent le garde-fou d'identite (voir [Garde-fou d'identite](#garde-fou-didentite)).
 
 ## Outils MCP
 
@@ -116,10 +136,13 @@ Les commandes d'ecriture (reply, edit, quote, mp) exigent l'authentification (au
 |-------|-------------|
 | `hfr_read` | Lire un topic. `page=0` pour la derniere page, `page_from`/`page_to` pour du batch concurrent, `print=true` pour le mode impression, `last=N` pour les N derniers posts |
 | `hfr_topics` | Lister les topics d'une categorie/sous-categorie avec pagination |
-| `hfr_reply` | Poster une reponse (BBCode) |
-| `hfr_edit` | Editer un post existant (detecte le first post, preserve le sujet) |
+| `hfr_cats` | Lister les categories (et les sous-categories d'une categorie) |
+| `hfr_reply` | Poster une reponse (BBCode). Param `expect` pour le garde-fou d'identite |
+| `hfr_create_topic` | Creer un topic. Param `expect` pour le garde-fou d'identite |
+| `hfr_edit` | Editer un post existant (detecte le first post, preserve le sujet). Param `expect` |
 | `hfr_quote` | Citer un ou plusieurs messages (`numreponse` ou `numreponses[]`) |
-| `hfr_mp` | Envoyer un message prive |
+| `hfr_mp` | Envoyer un message prive. Param `expect` pour le garde-fou d'identite |
+| `hfr_whoami` | Afficher le compte actif (pseudo + userId) et le compte attendu |
 
 ## Optimisation tokens
 
