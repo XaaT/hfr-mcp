@@ -53,6 +53,10 @@ func (c *Client) SetAllowUnguarded(b bool) { c.allowUnguarded = b }
 // ExpectedLogin returns the configured server-side expected account ("" if none).
 func (c *Client) ExpectedLogin() string { return c.expectedLogin }
 
+// GuardActive reports whether writes are guarded. It is inactive only when no
+// expected account is set and unguarded writes were explicitly opted into.
+func (c *Client) GuardActive() bool { return c.expectedLogin != "" || !c.allowUnguarded }
+
 // Login authenticates with the forum.
 // State is mutated only on full success; any failure leaves authed=false.
 func (c *Client) Login(pseudo, password string) error {

@@ -306,6 +306,10 @@ func handleWhoami(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[Whoami
 		if expect == "" {
 			expect = "(non défini)"
 		}
-		return nil, Result{Message: fmt.Sprintf("Connecté : %s (userId %s). Compte attendu : %s.", id.Pseudo, id.UserID, expect)}, nil
+		guard := "inactive"
+		if client.GuardActive() {
+			guard = "active"
+		}
+		return nil, Result{Message: fmt.Sprintf("Connecté : %s (userId %s). Compte attendu : %s. Garde : %s.", id.Pseudo, id.UserID, expect, guard)}, nil
 	}
 }

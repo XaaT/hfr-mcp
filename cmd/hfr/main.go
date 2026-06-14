@@ -113,7 +113,15 @@ loop:
 		if err != nil {
 			die("whoami failed: %v", err)
 		}
-		fmt.Printf("Connecté : %s (userId %s)\n", id.Pseudo, id.UserID)
+		expect := client.ExpectedLogin()
+		if expect == "" {
+			expect = "(non défini)"
+		}
+		guard := "inactive"
+		if client.GuardActive() {
+			guard = "active"
+		}
+		fmt.Printf("Connecté : %s (userId %s)\nCompte attendu : %s\nGarde : %s\n", id.Pseudo, id.UserID, expect, guard)
 	default:
 		die("unknown command: %s\n\n%s", cmd, usage)
 	}
