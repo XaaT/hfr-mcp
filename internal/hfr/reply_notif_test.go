@@ -63,12 +63,12 @@ func TestReplyPreservesNotifyField(t *testing.T) {
 		t.Fatalf("login: %v", err)
 	}
 
-	id, err := c.Reply(23, 35421, "hello", "id:1214571")
+	res, err := c.Reply(23, 35421, "hello", "id:1214571", NotifyKeep)
 	if err != nil {
 		t.Fatalf("reply: %v", err)
 	}
-	if id.Pseudo != "xatelitte" {
-		t.Fatalf("identity = %+v", id)
+	if res.Identity.Pseudo != "xatelitte" {
+		t.Fatalf("identity = %+v", res.Identity)
 	}
 	if atomic.LoadInt32(&postCount) != 1 {
 		t.Fatalf("expected exactly one POST, got %d", postCount)
@@ -114,7 +114,7 @@ func TestReplyPreservesNotifyFieldUnderDifferentName(t *testing.T) {
 	if err := c.Login("xatelitte", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	if _, err := c.Reply(23, 35421, "hello", ""); err != nil {
+	if _, err := c.Reply(23, 35421, "hello", "", NotifyKeep); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
 	if got := gotPost.Get("mail_notif"); got != "yes" {
@@ -135,7 +135,7 @@ func TestReplyPreserveStillGuarded(t *testing.T) {
 	if err := c.Login("XaTriX", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	if _, err := c.Reply(23, 35421, "hi", ""); err == nil {
+	if _, err := c.Reply(23, 35421, "hi", "", NotifyKeep); err == nil {
 		t.Fatal("expected identity refusal")
 	}
 	if atomic.LoadInt32(&postCount) != 0 {
@@ -181,7 +181,7 @@ func TestReplyPreserveCookieDriftBlocked(t *testing.T) {
 		t.Fatalf("login: %v", err)
 	}
 	// After GET, cookie is XaTriX; guard re-checks before POST → must refuse.
-	_, err := c.Reply(23, 35421, "hi", "")
+	_, err := c.Reply(23, 35421, "hi", "", NotifyKeep)
 	if err == nil {
 		t.Fatal("expected identity refusal after cookie drift during form GET")
 	}
@@ -226,7 +226,7 @@ func TestReplyCookieDriftBlockedIdConstraint(t *testing.T) {
 	if err := c.Login("xatelitte", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	_, err := c.Reply(23, 35421, "hi", "")
+	_, err := c.Reply(23, 35421, "hi", "", NotifyKeep)
 	if err == nil {
 		t.Fatal("expected refusal: stale userID must not satisfy id: after pseudo drift")
 	}
@@ -265,7 +265,7 @@ func TestReplyFallsBackWhenFormGetFails(t *testing.T) {
 	if err := c.Login("xatelitte", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	if _, err := c.Reply(23, 35421, "hello", ""); err != nil {
+	if _, err := c.Reply(23, 35421, "hello", "", NotifyKeep); err != nil {
 		t.Fatalf("reply must succeed despite junk form GET: %v", err)
 	}
 	if atomic.LoadInt32(&postCount) != 1 {
@@ -314,7 +314,7 @@ func TestReplyClientFieldsWinOverPreserved(t *testing.T) {
 	if err := c.Login("xatelitte", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	if _, err := c.Reply(23, 35421, "hello", ""); err != nil {
+	if _, err := c.Reply(23, 35421, "hello", "", NotifyKeep); err != nil {
 		t.Fatalf("reply: %v", err)
 	}
 	if atomic.LoadInt32(&postCount) != 1 {

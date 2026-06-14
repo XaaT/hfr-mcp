@@ -80,6 +80,47 @@ func preserveReplyFormFields(doc *goquery.Document) url.Values {
 	return out
 }
 
+// parseNotifyState reads the email-notification subscription state from the
+// reply form in doc. It understands two representations used by HFR:
+//
+//   - checkbox `emaill` (on message.php reply form): checked = subscribed,
+//     absent checked attr = not subscribed.
+//   - hidden input `emaill` (forum2.php quick-reply): value "1" = subscribed,
+//     "0" = not subscribed.
+//
+// Returns a pointer to true/false, or nil if the field is not found.
+func parseNotifyState(doc *goquery.Document) *bool {
+	// Locate the reply form (same logic as preserveReplyFormFields).
+	form := doc.Find(`form[action*="bddpost.php"]`).First()
+	if form.Length() == 0 {
+		form = doc.Find("form").FilterFunction(func(_ int, s *goquery.Selection) bool {
+			return s.Find("textarea[name=content_form]").Length() > 0
+		}).First()
+	}
+	if form.Length() == 0 {
+		return nil
+	}
+
+	var result *bool
+	form.Find(`input[name="emaill"]`).EachWithBreak(func(_ int, s *goquery.Selection) bool {
+		typ, _ := s.Attr("type")
+		switch strings.ToLower(typ) {
+		case "checkbox":
+			_, checked := s.Attr("checked")
+			v := checked
+			result = &v
+			return false // stop
+		case "hidden", "":
+			val, _ := s.Attr("value")
+			v := val == "1"
+			result = &v
+			return false // stop
+		}
+		return true
+	})
+	return result
+}
+
 // parseEditPage extracts FP detection and subcat/subject from an edit page
 func parseEditPage(doc *goquery.Document) EditInfo {
 	info := EditInfo{}

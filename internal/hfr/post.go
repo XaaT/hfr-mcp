@@ -16,16 +16,26 @@ import (
 // md_user cookie and re-checks identity immediately before the POST, so the
 // fail-closed #32 guard still gates the actual write.
 //
+// notify controls the email-notification subscription:
+//   - NotifyKeep (default): preserves the current subscription from the form.
+//   - NotifySubscribe: forces emaill=1 regardless of current state.
+//   - NotifyUnsubscribe: forces emaill=0 regardless of current state.
+//
+// The returned ReplyResult carries the Identity verified by the guard and the
+// effective Subscribed state after the post (nil when unknown).
+//
 // Side effect: this authenticated GET on message.php likely marks the topic as
 // read (HFR's "lu" flag), even if the POST is subsequently refused by the guard.
 // This is benign — opening the reply form in a browser does the same, and an
 // agent replying has typically just read the topic.
-func (c *Client) Reply(cat, postId int, content, expect string) (Identity, error) {
+func (c *Client) Reply(cat, postId int, content, expect string, notify NotifyMode) (ReplyResult, error) {
 	replyURL := fmt.Sprintf("%s/message.php?config=hfr.inc&cat=%d&post=%d&page=0&p=1&new=0",
 		c.baseURL, cat, postId)
 	preserved := url.Values{}
+	var state *bool
 	if replyDoc, err := c.doGet(replyURL); err == nil {
 		preserved = preserveReplyFormFields(replyDoc)
+		state = parseNotifyState(replyDoc)
 	}
 	// If the form fetch fails we fall back to the legacy hardcoded fields rather
 	// than block the reply; the notify field is then simply omitted as before.
@@ -49,7 +59,26 @@ func (c *Client) Reply(cat, postId int, content, expect string) (Identity, error
 	// subscription state we must round-trip.
 	mergePreservedFields(data, preserved)
 
-	return c.authenticatedPost("/bddpost.php?config=hfr.inc", data, expect, "post")
+	// Apply the notify mode AFTER merge so it wins over the preserved value.
+	var effective *bool
+	switch notify {
+	case NotifySubscribe:
+		data.Set("emaill", "1")
+		v := true
+		effective = &v
+	case NotifyUnsubscribe:
+		data.Set("emaill", "0")
+		v := false
+		effective = &v
+	default: // NotifyKeep
+		effective = state
+	}
+
+	id, err := c.authenticatedPost("/bddpost.php?config=hfr.inc", data, expect, "post")
+	if err != nil {
+		return ReplyResult{}, err
+	}
+	return ReplyResult{Identity: id, Subscribed: effective}, nil
 }
 
 // mergePreservedFields copies fields from the server-rendered reply form into

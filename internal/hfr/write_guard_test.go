@@ -44,7 +44,7 @@ func TestReplyRefusedOnMismatchNoPost(t *testing.T) {
 	if err := c.Login("XaTriX", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	_, err := c.Reply(23, 35421, "hi", "")
+	_, err := c.Reply(23, 35421, "hi", "", NotifyKeep)
 	if err == nil {
 		t.Fatal("expected identity refusal")
 	}
@@ -62,12 +62,12 @@ func TestReplyAllowedReturnsIdentity(t *testing.T) {
 	if err := c.Login("xatelitte", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	id, err := c.Reply(23, 35421, "hi", "id:1214571")
+	res, err := c.Reply(23, 35421, "hi", "id:1214571", NotifyKeep)
 	if err != nil {
 		t.Fatalf("reply: %v", err)
 	}
-	if id.Pseudo != "xatelitte" || atomic.LoadInt32(&posted) != 1 {
-		t.Fatalf("id=%+v posted=%d", id, atomic.LoadInt32(&posted))
+	if res.Identity.Pseudo != "xatelitte" || atomic.LoadInt32(&posted) != 1 {
+		t.Fatalf("id=%+v posted=%d", res.Identity, atomic.LoadInt32(&posted))
 	}
 }
 
@@ -140,11 +140,11 @@ func TestReplyAllowedWhenUnguarded(t *testing.T) {
 	if err := c.Login("xatelitte", "pw"); err != nil {
 		t.Fatalf("login: %v", err)
 	}
-	id, err := c.Reply(23, 35421, "hi", "")
+	res, err := c.Reply(23, 35421, "hi", "", NotifyKeep)
 	if err != nil {
 		t.Fatalf("reply: %v", err)
 	}
-	if id.Pseudo != "xatelitte" || atomic.LoadInt32(&posted) != 1 {
-		t.Fatalf("id=%+v posted=%d", id, atomic.LoadInt32(&posted))
+	if res.Identity.Pseudo != "xatelitte" || atomic.LoadInt32(&posted) != 1 {
+		t.Fatalf("id=%+v posted=%d", res.Identity, atomic.LoadInt32(&posted))
 	}
 }

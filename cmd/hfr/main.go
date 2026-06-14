@@ -19,7 +19,7 @@ Commands:
   read     <cat> <post> [page|last|from:to] [-o file]  Read a topic
   print    <cat> <post> [page] [--last N] [-o file]  Read in print mode (~1000 posts/page)
   new      <cat> <subcat> <subject> <content|--file path>  Create a new topic
-  reply    <cat> <post> <content|--file path>             Post a reply
+  reply    <cat> <post> <content|--file path> [--notify on|off]  Post a reply
   edit     <cat> <post> <numreponse> <content|--file path>  Edit a post
   quote    <cat> <post> <numreponse>          Get quote BBCode
   mp       <dest> <subject> <content>         Send a private message
@@ -291,17 +291,45 @@ func cmdNewTopic(client *hfr.Client, args []string, expect string) {
 }
 
 func cmdReply(client *hfr.Client, args []string, expect string) {
+	// Parse optional --notify on|off flag before positional args.
+	notify := hfr.NotifyKeep
+	filtered := args[:0:len(args)]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--notify" && i+1 < len(args) {
+			switch args[i+1] {
+			case "on":
+				notify = hfr.NotifySubscribe
+			case "off":
+				notify = hfr.NotifyUnsubscribe
+			default:
+				die("--notify must be 'on' or 'off', got %q", args[i+1])
+			}
+			i++ // skip value
+		} else {
+			filtered = append(filtered, args[i])
+		}
+	}
+	args = filtered
+
 	if len(args) < 3 {
-		die("usage: hfr reply <cat> <post> <content|--file path>")
+		die("usage: hfr reply <cat> <post> <content|--file path> [--notify on|off]")
 	}
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
 	content := readContent(args[2:])
-	id, err := client.Reply(cat, post, content, expect)
+	res, err := client.Reply(cat, post, content, expect, notify)
 	if err != nil {
 		die("reply failed: %v", err)
 	}
-	fmt.Printf("Reply posted (as %s / userId %s).\n", id.Pseudo, id.UserID)
+	notifyStr := "unchanged"
+	if res.Subscribed != nil {
+		if *res.Subscribed {
+			notifyStr = "subscribed"
+		} else {
+			notifyStr = "unsubscribed"
+		}
+	}
+	fmt.Printf("Reply posted (as %s / userId %s). Email notify: %s.\n", res.Identity.Pseudo, res.Identity.UserID, notifyStr)
 }
 
 func cmdEdit(client *hfr.Client, args []string, expect string) {

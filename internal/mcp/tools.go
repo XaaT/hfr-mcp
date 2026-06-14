@@ -27,6 +27,7 @@ type ReplyInput struct {
 	Post    int    `json:"post" jsonschema:"Numero du topic"`
 	Content string `json:"content" jsonschema:"Contenu du message en BBCode HFR"`
 	Expect  string `json:"expect,omitempty" jsonschema:"Compte attendu (pseudo, id:NNNN, ou pseudo:nom) ; l'écriture est refusée si la session ne correspond pas"`
+	Notify  string `json:"notify,omitempty" jsonschema:"Notifications e-mail du sujet: 'on' pour s'abonner, 'off' pour se désabonner, vide pour conserver l'état actuel"`
 }
 
 type EditInput struct {
@@ -171,11 +172,28 @@ func handleReply(client *hfr.Client, login LoginFunc) mcp.ToolHandlerFor[ReplyIn
 		if err := login(); err != nil {
 			return nil, Result{}, fmt.Errorf("login failed: %w", err)
 		}
-		id, err := client.Reply(input.Cat, input.Post, input.Content, input.Expect)
+		var notify hfr.NotifyMode
+		switch input.Notify {
+		case "on":
+			notify = hfr.NotifySubscribe
+		case "off":
+			notify = hfr.NotifyUnsubscribe
+		default:
+			notify = hfr.NotifyKeep
+		}
+		res, err := client.Reply(input.Cat, input.Post, input.Content, input.Expect, notify)
 		if err != nil {
 			return nil, Result{}, fmt.Errorf("reply failed: %w", err)
 		}
-		return nil, Result{Message: fmt.Sprintf("Message posté sous %s (userId %s).", id.Pseudo, id.UserID)}, nil
+		notifyStr := "inchangées"
+		if res.Subscribed != nil {
+			if *res.Subscribed {
+				notifyStr = "activées"
+			} else {
+				notifyStr = "désactivées"
+			}
+		}
+		return nil, Result{Message: fmt.Sprintf("Message posté sous %s (userId %s). Notifications e-mail : %s.", res.Identity.Pseudo, res.Identity.UserID, notifyStr)}, nil
 	}
 }
 
