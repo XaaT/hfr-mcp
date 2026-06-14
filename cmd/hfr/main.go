@@ -11,7 +11,7 @@ import (
 	"github.com/ForumHFR/hfr-mcp/internal/hfr"
 )
 
-const usage = `Usage: hfr [--auth] <command> [args...]
+const usage = `Usage: hfr [--auth] [--pseudo <login>] <command> [args...]
 
 Commands:
   cats     [cat]                               List categories (or subcats for a cat)
@@ -23,13 +23,18 @@ Commands:
   edit     <cat> <post> <numreponse> <content|--file path>  Edit a post
   quote    <cat> <post> <numreponse>          Get quote BBCode
   mp       <dest> <subject> <content>         Send a private message
+  whoami                                      Show the currently logged-in account
   version                                     Show version
 
 Options:
-  --auth    Login before executing. Required for new, reply, edit, quote, mp.
+  --auth             Login before executing. Required for new, reply, edit, quote, mp, whoami.
+  --pseudo <login>   Refuse to write if the logged-in account differs from <login>.
 
-Config: ./hfr.conf or ~/.config/hfr/config (login=, passwd=)
-Env vars HFR_LOGIN/HFR_PASSWD override config file.`
+Writes are refused unless an expected account is set (--pseudo / expect_login= /
+HFR_EXPECT_LOGIN), or HFR_ALLOW_UNGUARDED_WRITES=1 is exported to opt out.
+
+Config: ./hfr.conf or ~/.config/hfr/config (login=, passwd=, expect_login=)
+Env vars HFR_LOGIN/HFR_PASSWD/HFR_EXPECT_LOGIN override config file.`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -38,9 +43,19 @@ func main() {
 
 	args := os.Args[1:]
 	auth := false
-	if args[0] == "--auth" {
-		auth = true
-		args = args[1:]
+	pseudo := ""
+loop:
+	for len(args) > 0 {
+		switch {
+		case args[0] == "--auth":
+			auth = true
+			args = args[1:]
+		case args[0] == "--pseudo" && len(args) > 1:
+			pseudo = args[1]
+			args = args[2:]
+		default:
+			break loop
+		}
 	}
 
 	if len(args) < 1 {
@@ -70,6 +85,8 @@ func main() {
 		if err := client.Login(cfg.Login, cfg.Passwd); err != nil {
 			die("login failed: %v", err)
 		}
+		client.SetExpectedLogin(cfg.ExpectLogin)
+		client.SetAllowUnguarded(cfg.AllowUnguarded)
 	}
 
 	switch cmd {
@@ -82,15 +99,21 @@ func main() {
 	case "print":
 		cmdPrint(client, args)
 	case "new":
-		cmdNewTopic(client, args)
+		cmdNewTopic(client, args, pseudo)
 	case "reply":
-		cmdReply(client, args)
+		cmdReply(client, args, pseudo)
 	case "edit":
-		cmdEdit(client, args)
+		cmdEdit(client, args, pseudo)
 	case "quote":
 		cmdQuote(client, args)
 	case "mp":
-		cmdMP(client, args)
+		cmdMP(client, args, pseudo)
+	case "whoami":
+		id, err := client.Whoami()
+		if err != nil {
+			die("whoami failed: %v", err)
+		}
+		fmt.Printf("Connecté : %s (userId %s)\n", id.Pseudo, id.UserID)
 	default:
 		die("unknown command: %s\n\n%s", cmd, usage)
 	}
@@ -244,7 +267,7 @@ func parsePageRef(s string) int {
 	return mustInt(s, "page")
 }
 
-func cmdNewTopic(client *hfr.Client, args []string) {
+func cmdNewTopic(client *hfr.Client, args []string, expect string) {
 	if len(args) < 4 {
 		die("usage: hfr new <cat> <subcat> <subject> <content|--file path>")
 	}
@@ -252,28 +275,28 @@ func cmdNewTopic(client *hfr.Client, args []string) {
 	subcat := mustInt(args[1], "subcat")
 	subject := args[2]
 	content := readContent(args[3:])
-
-	if err := client.CreateTopic(cat, subcat, subject, content); err != nil {
+	id, err := client.CreateTopic(cat, subcat, subject, content, expect)
+	if err != nil {
 		die("create topic failed: %v", err)
 	}
-	fmt.Println("Topic created.")
+	fmt.Printf("Topic created (as %s / userId %s).\n", id.Pseudo, id.UserID)
 }
 
-func cmdReply(client *hfr.Client, args []string) {
+func cmdReply(client *hfr.Client, args []string, expect string) {
 	if len(args) < 3 {
 		die("usage: hfr reply <cat> <post> <content|--file path>")
 	}
 	cat := mustInt(args[0], "cat")
 	post := mustInt(args[1], "post")
 	content := readContent(args[2:])
-
-	if err := client.Reply(cat, post, content); err != nil {
+	id, err := client.Reply(cat, post, content, expect)
+	if err != nil {
 		die("reply failed: %v", err)
 	}
-	fmt.Println("Reply posted.")
+	fmt.Printf("Reply posted (as %s / userId %s).\n", id.Pseudo, id.UserID)
 }
 
-func cmdEdit(client *hfr.Client, args []string) {
+func cmdEdit(client *hfr.Client, args []string, expect string) {
 	if len(args) < 4 {
 		die("usage: hfr edit <cat> <post> <numreponse> <content|--file path>")
 	}
@@ -281,11 +304,11 @@ func cmdEdit(client *hfr.Client, args []string) {
 	post := mustInt(args[1], "post")
 	numreponse := mustInt(args[2], "numreponse")
 	content := readContent(args[3:])
-
-	if err := client.Edit(cat, post, numreponse, content); err != nil {
+	id, err := client.Edit(cat, post, numreponse, content, expect)
+	if err != nil {
 		die("edit failed: %v", err)
 	}
-	fmt.Println("Post edited.")
+	fmt.Printf("Post edited (as %s / userId %s).\n", id.Pseudo, id.UserID)
 }
 
 func readContent(args []string) string {
@@ -330,18 +353,18 @@ func cmdQuote(client *hfr.Client, args []string) {
 	fmt.Println(bbcode)
 }
 
-func cmdMP(client *hfr.Client, args []string) {
+func cmdMP(client *hfr.Client, args []string, expect string) {
 	if len(args) < 3 {
 		die("usage: hfr mp <dest> <subject> <content>")
 	}
 	dest := args[0]
 	subject := args[1]
 	content := strings.Join(args[2:], " ")
-
-	if err := client.SendMP(dest, subject, content); err != nil {
+	id, err := client.SendMP(dest, subject, content, expect)
+	if err != nil {
 		die("mp failed: %v", err)
 	}
-	fmt.Println("MP sent.")
+	fmt.Printf("MP sent (as %s / userId %s).\n", id.Pseudo, id.UserID)
 }
 
 func mustInt(s, name string) int {
