@@ -12,7 +12,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-const baseURL = "https://forum.hardware.fr"
+const defaultBaseURL = "https://forum.hardware.fr"
 
 // Client handles all interactions with the HFR forum
 type Client struct {
@@ -24,7 +24,7 @@ type Client struct {
 	userID         string // resolved numeric HFR user id at login ("" if unknown)
 	expectedLogin  string // server-side expected account (HFR_EXPECT_LOGIN)
 	allowUnguarded bool   // HFR_ALLOW_UNGUARDED_WRITES opt-out
-	baseURL        string // injectable; defaults to defaultBaseURL (set in a later task)
+	baseURL        string // injectable (tests); defaults to defaultBaseURL
 	// mu serializes login and the guarded write path (Login / authenticatedPost).
 	// checkIdentity is called by the holder of mu and must NOT lock it itself.
 	// Setters below are init-only (called before the server starts handling calls).
@@ -39,7 +39,8 @@ func NewClient() *Client {
 			Jar:     jar,
 			Timeout: 30 * time.Second,
 		},
-		ua: "hfr-mcp/" + Version,
+		ua:      "hfr-mcp/" + Version,
+		baseURL: defaultBaseURL,
 	}
 }
 
@@ -68,7 +69,7 @@ func (c *Client) Login(pseudo, password string) error {
 	}
 
 	// Check cookie
-	u, _ := url.Parse(baseURL)
+	u, _ := url.Parse(c.baseURL)
 	for _, cookie := range c.http.Jar.Cookies(u) {
 		if cookie.Name == "md_user" && cookie.Value == pseudo {
 			c.pseudo = pseudo
@@ -82,7 +83,7 @@ func (c *Client) Login(pseudo, password string) error {
 
 // fetchHashCheck retrieves the anti-CSRF token
 func (c *Client) fetchHashCheck() error {
-	doc, err := c.doGet(baseURL + "/user/editprofil.php?config=hardwarefr.inc")
+	doc, err := c.doGet(c.baseURL + "/user/editprofil.php?config=hardwarefr.inc")
 	if err != nil {
 		return fmt.Errorf("hash_check failed: %w", err)
 	}
@@ -130,7 +131,7 @@ func (c *Client) baseFormData(cat string, content string) url.Values {
 // doPost sends a POST request and returns the parsed document
 func (c *Client) doPost(endpoint string, data url.Values) (*goquery.Document, error) {
 	body := strings.NewReader(data.Encode())
-	req, err := http.NewRequest("POST", baseURL+endpoint, body)
+	req, err := http.NewRequest("POST", c.baseURL+endpoint, body)
 	if err != nil {
 		return nil, fmt.Errorf("post request failed: %w", err)
 	}

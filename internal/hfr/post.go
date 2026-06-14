@@ -65,7 +65,7 @@ func (c *Client) Edit(cat, postId, numreponse int, content string) error {
 
 	// Fetch the edit page to detect FP and extract subcat/subject
 	editURL := fmt.Sprintf("%s/message.php?config=hfr.inc&cat=%d&post=%d&numreponse=%d",
-		baseURL, cat, postId, numreponse)
+		c.baseURL, cat, postId, numreponse)
 
 	editDoc, err := c.doGet(editURL)
 	if err != nil {

@@ -20,7 +20,7 @@ func (c *Client) readPage(cat, postId, page int, print bool) (*Topic, error) {
 		printVal = 1
 	}
 	topicURL := fmt.Sprintf("%s/forum2.php?config=hfr.inc&cat=%d&post=%d&page=%d&p=1&sondage=0&owntopic=0&trash=0&trash_post=0&print=%d&numreponse=0&quote_only=0&new=0&nojs=0",
-		baseURL, cat, postId, page, printVal)
+		c.baseURL, cat, postId, page, printVal)
 
 	doc, err := c.doGet(topicURL)
 	if err != nil {
@@ -162,7 +162,7 @@ func (c *Client) ListTopics(cat, subcat, page int) (*TopicList, error) {
 		page = 1
 	}
 	listURL := fmt.Sprintf("%s/forum1.php?config=hfr.inc&cat=%d&subcat=%d&page=%d&sondage=0&owntopic=0&trash=0&trash_post=0&moderation=0&new=0&nojs=0&subcatgroup=0",
-		baseURL, cat, subcat, page)
+		c.baseURL, cat, subcat, page)
 
 	doc, err := c.doGet(listURL)
 	if err != nil {
@@ -189,7 +189,7 @@ func (c *Client) FetchQuote(cat, postId int, numreponses ...int) (string, error)
 	}
 
 	// Set multiquote cookie: quoteshardwarefr-{cat}-{post}=|num1|num2|...
-	u, _ := url.Parse(baseURL)
+	u, _ := url.Parse(c.baseURL)
 	cookieVal := ""
 	for _, nr := range numreponses {
 		cookieVal += fmt.Sprintf("|%d", nr)
@@ -200,7 +200,7 @@ func (c *Client) FetchQuote(cat, postId int, numreponses ...int) (string, error)
 	}})
 
 	quoteURL := fmt.Sprintf("%s/message.php?config=hfr.inc&cat=%d&post=%d&numrep=%d&page=1&p=1&new=0",
-		baseURL, cat, postId, numreponses[0])
+		c.baseURL, cat, postId, numreponses[0])
 
 	doc, err := c.doGet(quoteURL)
 	if err != nil {
